@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JAN Master Web - 店舗・倉庫用JAN/ITFブラウザ統合ツール</title>
+    
+    <!-- CDN Imports: Single HTML execution ready for standard mobile web browsers -->
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- JsBarcode for rendering barcode graphics dynamically -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- html5-qrcode for mobile camera scanner -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            900: '#0c4a6e'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Barcode Tag print preview styling */
+        .barcode-tag {
+            width: 80mm;
+            min-height: 42mm;
+            border: 2px dashed #64748b;
+            padding: 10px;
+            background: white;
+            color: black;
+        }
+        @media print {
+            body * { visibility: hidden; }
+            #printable-area, #printable-area * { visibility: visible; }
+            #printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col pb-20 md:pb-0">
+
+    <!-- Header Area -->
+    <header class="bg-brand-700 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <i class="fa-solid fa-barcode text-2xl text-amber-300"></i>
+                <div>
+                    <h1 class="font-bold text-base md:text-lg leading-tight">JAN Master Web</h1>
+                    <p class="text-[10px] md:text-xs text-brand-100">ブラウザで即動く JAN/ITF スキャナー・作成ツール</p>
+                </div>
+            </div>
+            <div id="statusBadge" class="bg-brand-600 border border-brand-500 text-brand-100 text-[11px] px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span>Webブラウザ版</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-4xl w-full mx-auto p-3 sm:p-5 flex-1">
+        
+        <!-- Navigation Tabs (Mobile bottom bar / Desktop top tabs) -->
+        <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-40 md:relative md:border-0 md:bg-transparent md:mb-5">
+            <nav class="flex justify-around md:justify-start md:space-x-2 p-1 md:p-0 max-w-4xl mx-auto">
+                <button onclick="switchTab('tab-scanner')" class="nav-tab active-tab flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold text-brand-600 bg-white shadow-sm md:border border-slate-200">
+                    <i class="fa-solid fa-camera text-base md:mr-1.5"></i>
+                    <span>カメラ読取</span>
+                </button>
+                <button onclick="switchTab('tab-converter')" class="nav-tab flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold text-slate-500 hover:text-brand-600 hover:bg-white transition">
+                    <i class="fa-solid fa-boxes-packing text-base md:mr-1.5"></i>
+                    <span>単品⇔箱/ITF</span>
+                </button>
+                <button onclick="switchTab('tab-lookup')" class="nav-tab flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold text-slate-500 hover:text-brand-600 hover:bg-white transition">
+                    <i class="fa-solid fa-magnifying-glass text-base md:mr-1.5"></i>
+                    <span>欠損補完・検索</span>
+                </button>
+                <button onclick="switchTab('tab-products')" class="nav-tab flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold text-slate-500 hover:text-brand-600 hover:bg-white transition">
+                    <i class="fa-solid fa-database text-base md:mr-1.5"></i>
+                    <span>商品マスター</span>
+                </button>
+                <button onclick="switchTab('tab-favorites')" class="nav-tab flex-1 md:flex-none flex flex-col md:flex-row items-center justify-center py-2 px-3 rounded-xl text-xs font-semibold text-slate-500 hover:text-brand-600 hover:bg-white transition">
+                    <i class="fa-solid fa-star text-base md:mr-1.5"></i>
+                    <span>JAN取り</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- TAB 1: Camera Barcode Scanner & Direct Dynamic Action Card -->
+        <section id="tab-scanner" class="tab-content block space-y-4">
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-camera text-brand-600"></i> カメラバーコード読み取り
+                        </h2>
+                        <p class="text-xs text-slate-500">枠内にJANコードまたはITFコードをかざしてください</p>
+                    </div>
+                    <button id="toggleCameraBtn" onclick="toggleCamera()" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white rounded-xl text-xs font-bold shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-video"></i> <span>カメラ開始</span>
+                    </button>
+                </div>
+
+                <!-- Camera Viewfinder -->
+                <div class="relative bg-slate-900 rounded-xl overflow-hidden min-h-[260px] max-h-[380px] flex items-center justify-center border-2 border-slate-300 shadow-inner">
+                    <div id="reader" class="w-full"></div>
+                    <div id="scannerOverlay" class="absolute inset-0 pointer-events-none border-2 border-dashed border-emerald-400 opacity-70 rounded-xl m-6 flex items-center justify-center">
+                        <span class="bg-black/70 text-emerald-300 text-[11px] px-3 py-1 rounded-full font-mono">バーコードを水平に合わせてください</span>
+                    </div>
+                </div>
+
+                <!-- DYNAMIC RESULT CARD: Display Scanned JAN + Rendered Barcode Graphic + Function Direct Actions -->
+                <div id="scannedResultCard" class="hidden p-4 bg-emerald-50/90 border-2 border-emerald-300 rounded-2xl shadow-md space-y-4 transition-all">
+                    <!-- Top Read Out Info -->
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-200/80 px-2.5 py-0.5 rounded-full">
+                                <i class="fa-solid fa-circle-check"></i> 読み込み成功
+                            </span>
+                            <div id="scannedJanText" class="text-2xl md:text-3xl font-mono font-black text-slate-900 mt-1 tracking-wider">4901234567890</div>
+                            <div id="scannedProductName" class="text-xs md:text-sm font-semibold text-slate-700 mt-0.5">--- 未登録商品 ---</div>
+                        </div>
+                        <button onclick="playBeepSound()" class="text-xs bg-white border border-emerald-300 px-2.5 py-1 rounded-lg text-emerald-700 font-medium hover:bg-emerald-100">
+                            <i class="fa-solid fa-volume-high"></i> ビープ試聴
+                        </button>
+                    </div>
+
+                    <!-- Auto-Generated Barcode Image Box (JsBarcode) -->
+                    <div class="bg-white p-3 rounded-xl border border-emerald-200 flex flex-col items-center justify-center shadow-inner">
+                        <svg id="scannedBarcodeSvg" class="max-w-full h-auto"></svg>
+                        <span id="scannedBarcodeCaption" class="text-[10px] font-mono font-bold text-slate-500 mt-0.5"></span>
+                    </div>
+
+                    <!-- Action Buttons Direct Linking to System Functions -->
+                    <div>
+                        <p class="text-[11px] font-bold text-slate-600 mb-2 flex items-center gap-1">
+                            <i class="fa-solid fa-bolt text-amber-500"></i> スキャンコードのアクション操作を選択:
+                        </p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <!-- 1. Product Master Registration/Search -->
+                            <button onclick="actionProductSearchOrRegister()" class="p-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-left shadow-sm active:scale-95 transition">
+                                <div class="text-xs font-bold text-brand-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-box-archive text-brand-600"></i> 商品情報確認/登録
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">マスター検索または登録</div>
+                            </button>
+
+                            <!-- 2. Single ⇔ Box JAN Prediction -->
+                            <button onclick="actionPredictBoxJan()" class="p-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-left shadow-sm active:scale-95 transition">
+                                <div class="text-xs font-bold text-emerald-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-rotate text-emerald-600"></i> 単品⇔箱JAN予測
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">箱コードバリエーション推測</div>
+                            </button>
+
+                            <!-- 3. ITF Conversion -->
+                            <button onclick="actionConvertToITF()" class="p-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-left shadow-sm active:scale-95 transition">
+                                <div class="text-xs font-bold text-indigo-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-barcode text-indigo-600"></i> ITF-14 変換
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">ケース用ITF-14生成</div>
+                            </button>
+
+                            <!-- 4. Wildcard / Missing Completion -->
+                            <button onclick="actionMissingResolver()" class="p-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-left shadow-sm active:scale-95 transition">
+                                <div class="text-xs font-bold text-amber-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-calculator text-amber-600"></i> 欠損補完・検証
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">チェックディジット検証</div>
+                            </button>
+
+                            <!-- 5. Favorite / JAN Pickup -->
+                            <button onclick="actionToggleFavorite()" class="p-2.5 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-left shadow-sm active:scale-95 transition col-span-2 sm:col-span-1">
+                                <div class="text-xs font-bold text-rose-700 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-star text-amber-400"></i> お気に入り追加
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">「JAN取り」一覧へ登録</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: Single ⇔ Box JAN Predictor & ITF Converter -->
+        <section id="tab-converter" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-base md:text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-boxes-packing text-brand-600"></i> 単品JAN ⇔ ケース(箱)JAN・ITF-14変換
+                </h2>
+                <p class="text-xs text-slate-500 mb-4">スキャンまたは入力した単品JANから関連ケースコード（ITF-14・ケースJAN）を動的に演算生成します。</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Left: Input & Settings -->
+                    <div class="p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1">基準JANコード (13桁/8桁)</label>
+                            <input type="text" id="baseJanInput" placeholder="4901234567890" 
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base font-mono focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">パッケージ指示符 (ITF)</label>
+                                <select id="itfIndicatorSelect" class="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs bg-white">
+                                    <option value="1">1 : 標準ケース(10〜24個)</option>
+                                    <option value="2">2 : 中箱・ボール箱</option>
+                                    <option value="3">3 : 特大ケース/アソート</option>
+                                    <option value="0">0 : その他仕様</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-600 mb-1">入数目安</label>
+                                <input type="number" id="caseQtyInput" value="24" class="w-full px-2 py-2 border border-slate-300 rounded-lg text-xs font-mono">
+                            </div>
+                        </div>
+
+                        <button onclick="calculateBoxAndITF()" class="w-full py-2.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold rounded-xl text-xs shadow transition flex justify-center items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 予測コード計算・生成
+                        </button>
+                    </div>
+
+                    <!-- Right: Prediction Output & Barcode Render -->
+                    <div id="converterOutputArea" class="p-4 border border-brand-200 rounded-xl bg-brand-50/40 space-y-3">
+                        <h3 class="text-xs font-bold uppercase tracking-wider text-brand-900">変換結果バーコード</h3>
+
+                        <div class="space-y-3">
+                            <!-- ITF-14 Result -->
+                            <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
+                                    <span class="font-bold text-slate-700">ITF-14 (ケース用)</span>
+                                    <span class="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-1.5 py-0.5 rounded">Modulus 10</span>
+                                </div>
+                                <div id="outputItf14Text" class="font-mono text-lg font-black text-slate-900">----------------</div>
+                                <div class="mt-2 flex items-center justify-between">
+                                    <svg id="itf14BarcodeSvg" class="max-h-12 max-w-[200px]"></svg>
+                                    <button onclick="openPrintModal('ITF14', document.getElementById('outputItf14Text').innerText, 'ケースITF-14タグ')" class="px-2.5 py-1 bg-slate-800 text-white text-[11px] font-medium rounded-lg hover:bg-slate-900">
+                                        <i class="fa-solid fa-print"></i> 印刷
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Box JAN Result -->
+                            <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                                <div class="flex justify-between items-center text-xs text-slate-500 mb-1">
+                                    <span class="font-bold text-slate-700">推定ケースJAN-13</span>
+                                    <span class="text-[10px] text-slate-400">商品コード連番+1</span>
+                                </div>
+                                <div id="outputBoxJanText" class="font-mono text-lg font-black text-slate-900">----------------</div>
+                                <div class="mt-2 flex items-center justify-between">
+                                    <svg id="boxJanBarcodeSvg" class="max-h-12 max-w-[200px]"></svg>
+                                    <button onclick="openPrintModal('EAN13', document.getElementById('outputBoxJanText').innerText, '推定ケースJANタグ')" class="px-2.5 py-1 bg-slate-800 text-white text-[11px] font-medium rounded-lg hover:bg-slate-900">
+                                        <i class="fa-solid fa-print"></i> 印刷
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: JAN Lookup & Missing Digit Resolver -->
+        <section id="tab-lookup" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-base md:text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass text-brand-600"></i> 検索 & 欠損桁（?）補完演算
+                </h2>
+                <p class="text-xs text-slate-500 mb-4">擦れて読めない桁に「?」を入れて実行すると、Modulus 10演算から正しいコードパターンを完全復元します。</p>
+
+                <div class="space-y-3">
+                    <div class="flex gap-2">
+                        <div class="relative flex-1">
+                            <input type="text" id="lookupInput" placeholder="例: 49012?456789? または 4902102072533" 
+                                class="w-full pl-9 pr-3 py-2.5 text-base font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:outline-none uppercase">
+                            <i class="fa-solid fa-barcode absolute left-3 top-3.5 text-slate-400 text-sm"></i>
+                        </div>
+                        <button onclick="executeLookup()" class="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white font-bold rounded-xl text-xs shadow transition flex items-center gap-1">
+                            <i class="fa-solid fa-calculator"></i> 補完実行
+                        </button>
+                    </div>
+
+                    <!-- Hints -->
+                    <div class="flex flex-wrap gap-2 text-[11px] text-slate-500 items-center">
+                        <span class="font-semibold text-slate-600">お試し入力:</span>
+                        <button onclick="fillLookupExample('4901234567890')" class="underline hover:text-brand-600">正常13桁</button> |
+                        <button onclick="fillLookupExample('49012?456789?')" class="underline hover:text-brand-600">欠損「?」あり</button> |
+                        <button onclick="fillLookupExample('49123456')" class="underline hover:text-brand-600">8桁短縮JAN</button>
+                    </div>
+                </div>
+
+                <!-- Results Output -->
+                <div id="lookupResultContainer" class="mt-5 hidden space-y-3">
+                    <div class="p-3.5 rounded-xl border border-slate-200 bg-slate-50">
+                        <h3 class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
+                            <i class="fa-solid fa-square-poll-vertical text-brand-600"></i> 演算・判定結果
+                        </h3>
+                        <div id="lookupResultsList" class="space-y-2"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: Product Master List -->
+        <section id="tab-products" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                    <div>
+                        <h2 class="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <i class="fa-solid fa-database text-brand-600"></i> 商品マスター一覧
+                        </h2>
+                        <p class="text-xs text-slate-500">店舗内データ管理（ブラウザローカルストレージ自動保持）</p>
+                    </div>
+                    <button onclick="openProductModal()" class="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow transition flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> 新規商品登録
+                    </button>
+                </div>
+
+                <!-- Filter -->
+                <div class="mb-3">
+                    <input type="text" id="masterSearchInput" oninput="renderProductsList()" placeholder="商品名、JAN、ITFコードでリアルタイム絞り込み..." 
+                        class="w-full px-3 py-2 text-xs md:text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <!-- List Table -->
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs md:text-sm">
+                        <thead class="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5">商品名 / 価格</th>
+                                <th class="p-2.5">単品JAN</th>
+                                <th class="p-2.5">ケースITF/JAN</th>
+                                <th class="p-2.5 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="productTableBody" class="divide-y divide-slate-100 font-medium">
+                            <!-- Dynamic Content -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 5: Quick Favorite JAN Pickup Grid -->
+        <section id="tab-favorites" class="tab-content hidden space-y-4">
+            <div class="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 class="text-base md:text-lg font-bold text-slate-800 mb-1 flex items-center gap-2">
+                    <i class="fa-solid fa-star text-amber-400"></i> レジ用クイック「JAN取り」グリッド
+                </h2>
+                <p class="text-xs text-slate-500 mb-4">バーコードが付いていない商品や読み取りしにくい商品をタップ1回で画面上にバーコード表示できます。</p>
+
+                <div id="favoritesGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    <!-- Dynamic Grid -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: Product Add / Edit -->
+    <div id="productModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl p-5 shadow-2xl relative space-y-4">
+            <button onclick="closeProductModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h3 id="productModalTitle" class="text-base font-bold text-slate-800">商品マスター登録</h3>
+
+            <form id="productForm" onsubmit="handleProductSubmit(event)" class="space-y-3">
+                <input type="hidden" id="prodId">
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 mb-1">商品名 <span class="text-rose-500">*</span></label>
+                    <input type="text" id="prodName" required placeholder="例: 烏龍茶 500ml PET" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">単品JAN <span class="text-rose-500">*</span></label>
+                        <input type="text" id="prodSingleJan" required placeholder="4901234567890" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">販売価格 (税込)</label>
+                        <input type="number" id="prodPrice" placeholder="160" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">ケースITF / 箱JAN</label>
+                        <input type="text" id="prodBoxCode" placeholder="14901234567897" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">ケース入数</label>
+                        <input type="number" id="prodCaseQty" placeholder="24" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 pt-1">
+                    <input type="checkbox" id="prodIsFavorite" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+                    <label for="prodIsFavorite" class="text-xs text-slate-700 font-bold">「JAN取り」お気に入りに追加する</label>
+                </div>
+
+                <div class="pt-2 flex justify-end gap-2">
+                    <button type="button" onclick="closeProductModal()" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg text-xs font-semibold hover:bg-slate-50">キャンセル</button>
+                    <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow">保存する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: Full Display Barcode & Printable Preview Modal -->
+    <div id="barcodeDisplayModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-sm rounded-2xl p-5 shadow-2xl relative text-center space-y-4">
+            <button onclick="closeBarcodeDisplayModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
+            <h3 id="modalBarcodeTitle" class="text-base font-bold text-slate-800">バーコード表示</h3>
+            <p id="modalBarcodeSub" class="text-xs text-slate-500">スキャナーで読み取り可能です</p>
+
+            <div class="p-3 bg-white rounded-xl border border-slate-200 flex flex-col items-center justify-center shadow-inner">
+                <svg id="displayBarcodeSvg" class="max-w-full h-auto"></svg>
+                <span id="displayBarcodeCodeText" class="font-mono font-black text-lg text-slate-900 mt-2 tracking-widest"></span>
+            </div>
+
+            <div class="flex gap-2">
+                <button onclick="downloadBarcodeSvg()" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
+                    <i class="fa-solid fa-download"></i> 画像保存
+                </button>
+                <button onclick="printCurrentBarcodeTag()" class="flex-1 py-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-xl transition">
+                    <i class="fa-solid fa-print"></i> 値札印刷
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Area for Printer Page -->
+    <div id="printable-area" class="hidden">
+        <div class="flex flex-col items-center justify-center min-h-screen">
+            <div class="barcode-tag flex flex-col items-center justify-center text-center">
+                <h4 id="printName" class="font-bold text-sm mb-1"></h4>
+                <svg id="printBarcodeSvg"></svg>
+                <span id="printCodeText" class="font-mono text-xs font-bold mt-1"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Default initial data for browser local storage
+        let productsMaster = [
+            { id: '1', name: '緑茶 500ml PET', singleJan: '4902102072533', boxCode: '14902102072530', price: 160, caseQty: 24, isFavorite: true },
+            { id: '2', name: 'ミネラルウォーター 2L', singleJan: '4901777018686', boxCode: '14901777018683', price: 120, caseQty: 6, isFavorite: true },
+            { id: '3', name: '缶コーヒー 185g', singleJan: '4901085089308', boxCode: '14901085089305', price: 130, caseQty: 30, isFavorite: false }
+        ];
+
+        let html5QrCode = null;
+        let isScannerActive = false;
+        let currentScannedJan = '';
+        let activeModalBarcodeData = null;
+
+        // Initialize on Load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadLocalStorageData();
+            renderProductsList();
+            renderFavoritesGrid();
+        });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-tab').forEach(el => {
+                el.classList.remove('active-tab', 'text-brand-600', 'bg-white', 'shadow-sm', 'border');
+                el.classList.add('text-slate-500');
+            });
+
+            document.getElementById(tabId).classList.remove('hidden');
+
+            const activeBtn = event ? event.currentTarget : null;
+            if (activeBtn) {
+                activeBtn.classList.add('active-tab', 'text-brand-600', 'bg-white', 'shadow-sm', 'border');
+                activeBtn.classList.remove('text-slate-500');
+            }
+
+            if (tabId !== 'tab-scanner' && isScannerActive) {
+                stopCamera();
+            }
+        }
+
+        // Modulus 10 Weighted 3:1 Check Digit Calculation
+        function calculateModulus10(codeWithoutCd) {
+            const digits = codeWithoutCd.split('').map(Number);
+            let sum = 0;
+            const len = digits.length;
+
+            for (let i = 0; i < len; i++) {
+                const weight = ((len - i) % 2 === 1) ? 3 : 1;
+                sum += digits[i] * weight;
+            }
+
+            const mod = sum % 10;
+            return mod === 0 ? 0 : 10 - mod;
+        }
+
+        function isValidJan(code) {
+            if (!/^\d{8}$|^\d{13}$|^\d{14}$/.test(code)) return false;
+            const body = code.slice(0, -1);
+            const cd = parseInt(code.slice(-1), 10);
+            return calculateModulus10(body) === cd;
+        }
+
+        // Camera Toggle
+        function toggleCamera() {
+            if (isScannerActive) {
+                stopCamera();
+            } else {
+                startCamera();
+            }
+        }
+
+        function startCamera() {
+            const btn = document.getElementById('toggleCameraBtn');
+            html5QrCode = new Html5Qrcode("reader");
+
+            const config = { 
+                fps: 15, 
+                qrbox: { width: 280, height: 160 },
+                formatsToSupport: [
+                    Html5QrcodeSupportedFormats.EAN_13,
+                    Html5QrcodeSupportedFormats.EAN_8,
+                    Html5QrcodeSupportedFormats.ITF
+                ]
+            };
+
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                config, 
+                onScanSuccess
+            ).then(() => {
+                isScannerActive = true;
+                btn.innerHTML = `<i class="fa-solid fa-square"></i> <span>カメラ停止</span>`;
+                btn.classList.replace('bg-brand-600', 'bg-rose-600');
+            }).catch(err => {
+                alert("カメラの起動に失敗しました。ブラウザのカメラ権限を許可してください。\n" + err);
+            });
+        }
+
+        function stopCamera() {
+            if (html5QrCode && isScannerActive) {
+                html5QrCode.stop().then(() => {
+                    isScannerActive = false;
+                    const btn = document.getElementById('toggleCameraBtn');
+                    btn.innerHTML = `<i class="fa-solid fa-video"></i> <span>カメラ開始</span>`;
+                    btn.classList.replace('bg-rose-600', 'bg-brand-600');
+                }).catch(e => console.log(e));
+            }
+        }
+
+        // Camera Read Callback
+        function onScanSuccess(decodedText) {
+            playBeepSound();
+            currentScannedJan = decodedText;
+
+            // 1. Update Scanned Card Text
+            document.getElementById('scannedJanText').innerText = decodedText;
+            const matched = productsMaster.find(p => p.singleJan === decodedText || p.boxCode === decodedText);
+            document.getElementById('scannedProductName').innerText = matched ? `${matched.name} (¥${matched.price})` : '--- 未登録商品 ---';
+
+            // 2. Render Barcode Graphic dynamically below text
+            try {
+                JsBarcode("#scannedBarcodeSvg", decodedText, {
+                    format: decodedText.length === 14 ? 'ITF14' : (decodedText.length === 8 ? 'EAN8' : 'EAN13'),
+                    width: 2,
+                    height: 60,
+                    displayValue: false
+                });
+                document.getElementById('scannedBarcodeCaption').innerText = `Format: ${decodedText.length === 14 ? 'ITF-14' : 'JAN/EAN'} | ${decodedText}`;
+            } catch(e) {
+                console.error("Barcode generation error", e);
+            }
+
+            // 3. Display Result Card
+            document.getElementById('scannedResultCard').classList.remove('hidden');
+        }
+
+        function playBeepSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(1046.5, ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, ctx.currentTime);
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.12);
+            } catch(e) {}
+        }
+
+        // Action Buttons Logic under scanned Result Card
+        function actionProductSearchOrRegister() {
+            if (!currentScannedJan) return;
+            const matched = productsMaster.find(p => p.singleJan === currentScannedJan || p.boxCode === currentScannedJan);
+            if (matched) {
+                openProductModal(matched);
+            } else {
+                openProductModal({ id: '', name: '', singleJan: currentScannedJan, boxCode: '', price: '', caseQty: 24, isFavorite: true });
+            }
+        }
+
+        function actionPredictBoxJan() {
+            if (!currentScannedJan) return;
+            document.getElementById('baseJanInput').value = currentScannedJan;
+            switchTab('tab-converter');
+            calculateBoxAndITF();
+        }
+
+        function actionConvertToITF() {
+            if (!currentScannedJan) return;
+            document.getElementById('baseJanInput').value = currentScannedJan;
+            switchTab('tab-converter');
+            calculateBoxAndITF();
+        }
+
+        function actionMissingResolver() {
+            if (!currentScannedJan) return;
+            document.getElementById('lookupInput').value = currentScannedJan;
+            switchTab('tab-lookup');
+            executeLookup();
+        }
+
+        function actionToggleFavorite() {
+            if (!currentScannedJan) return;
+            let matched = productsMaster.find(p => p.singleJan === currentScannedJan);
+            if (matched) {
+                matched.isFavorite = true;
+            } else {
+                productsMaster.push({
+                    id: Date.now().toString(),
+                    name: `スキャン商品 (${currentScannedJan.slice(-4)})`,
+                    singleJan: currentScannedJan,
+                    boxCode: '',
+                    price: 0,
+                    caseQty: 1,
+                    isFavorite: true
+                });
+            }
+            saveLocalStorageData();
+            renderFavoritesGrid();
+            alert(`JAN [${currentScannedJan}] を「JAN取り」お気に入りに追加しました。`);
+        }
+
+        // Calculation & Prediction Logic
+        function calculateBoxAndITF() {
+            const base = document.getElementById('baseJanInput').value.trim();
+            const indicator = document.getElementById('itfIndicatorSelect').value;
+
+            if (base.length < 8 || !/^\d+$/.test(base)) {
+                alert("有効な数字のJANコードを入力してください。");
+                return;
+            }
+
+            let fullItf14 = '-------------';
+            let fullBoxJan = '-------------';
+
+            if (base.length === 13 || base.length === 12) {
+                const janBody = base.slice(0, 12);
+                const itfBody = indicator + janBody;
+                const itfCd = calculateModulus10(itfBody);
+                fullItf14 = itfBody + itfCd;
+
+                const itemCodePart = parseInt(janBody.slice(3, 12), 10) + 1;
+                const boxJanBody = janBody.slice(0, 3) + itemCodePart.toString().padStart(9, '0');
+                const boxJanCd = calculateModulus10(boxJanBody);
+                fullBoxJan = boxJanBody + boxJanCd;
+            }
+
+            document.getElementById('outputItf14Text').innerText = fullItf14;
+            document.getElementById('outputBoxJanText').innerText = fullBoxJan;
+
+            // Render Output Barcodes
+            try {
+                if (fullItf14 !== '-------------') {
+                    JsBarcode("#itf14BarcodeSvg", fullItf14, { format: "ITF14", width: 1.5, height: 40, displayValue: false });
+                }
+                if (fullBoxJan !== '-------------') {
+                    JsBarcode("#boxJanBarcodeSvg", fullBoxJan, { format: "EAN13", width: 1.5, height: 40, displayValue: false });
+                }
+            } catch(e) {}
+        }
+
+        // Lookup & Wildcard Solver
+        function executeLookup() {
+            const raw = document.getElementById('lookupInput').value.trim();
+            const container = document.getElementById('lookupResultContainer');
+            const list = document.getElementById('lookupResultsList');
+            list.innerHTML = '';
+
+            if (!raw) return;
+
+            if (raw.includes('?')) {
+                const results = resolveMissingDigits(raw);
+                if (results.length === 0) {
+                    list.innerHTML = `<div class="text-xs text-rose-500 p-2">該当するModulus 10適合コードが見元かりませんでした。</div>`;
+                } else {
+                    results.forEach(res => {
+                        list.innerHTML += `
+                            <div class="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm">
+                                <div>
+                                    <span class="font-mono font-bold text-brand-700 text-base">${res}</span>
+                                    <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded ml-2">検証適合</span>
+                                </div>
+                                <button onclick="openPrintModal('EAN13', '${res}', '補完JAN')" class="text-xs px-3 py-1 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700">
+                                    バーコード表示
+                                </button>
+                            </div>
+                        `;
+                    });
+                }
+            } else {
+                const isValid = isValidJan(raw);
+                const matched = productsMaster.find(p => p.singleJan === raw || p.boxCode === raw);
+
+                list.innerHTML = `
+                    <div class="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono font-bold text-lg text-slate-900">${raw}</span>
+                            <span class="text-[11px] font-bold px-2 py-0.5 rounded ${isValid ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                                ${isValid ? 'チェックディジット正常' : '不正な桁数/CD不一致'}
+                            </span>
+                        </div>
+                        ${matched ? `<p class="text-xs font-bold text-brand-700">登録商品: ${matched.name} (¥${matched.price})</p>` : `<p class="text-xs text-slate-400">未登録コード</p>`}
+                        <button onclick="openPrintModal('${raw.length === 14 ? 'ITF14' : 'EAN13'}', '${raw}', '${matched ? matched.name : '照会コード'}')" class="mt-1 text-xs px-3 py-1.5 bg-slate-800 text-white font-bold rounded-lg">
+                            <i class="fa-solid fa-qrcode"></i> バーコード作成
+                        </button>
+                    </div>
+                `;
+            }
+
+            container.classList.remove('hidden');
+        }
+
+        function resolveMissingDigits(pattern) {
+            const results = [];
+            const qCount = (pattern.match(/\?/g) || []).length;
+            if (qCount > 3) {
+                alert("「?」は3桁以下で入力してください。");
+                return [];
+            }
+
+            const max = Math.pow(10, qCount);
+            for (let i = 0; i < max; i++) {
+                const replacements = i.toString().padStart(qCount, '0').split('');
+                let candidate = pattern;
+                replacements.forEach(r => { candidate = candidate.replace('?', r); });
+
+                if (isValidJan(candidate)) {
+                    results.push(candidate);
+                }
+            }
+            return results;
+        }
+
+        function fillLookupExample(val) {
+            document.getElementById('lookupInput').value = val;
+            executeLookup();
+        }
+
+        // Product Master & Local Storage Management
+        function renderProductsList() {
+            const search = (document.getElementById('masterSearchInput')?.value || '').toLowerCase();
+            const tbody = document.getElementById('productTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            const filtered = productsMaster.filter(p => 
+                p.name.toLowerCase().includes(search) || 
+                p.singleJan.includes(search) || 
+                (p.boxCode && p.boxCode.includes(search))
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-xs text-slate-400">該当商品が登録されていません</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(p => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-2.5">
+                            <div class="font-bold text-slate-900">${p.name}</div>
+                            <div class="text-[11px] text-emerald-700 font-bold">¥${p.price || 0}</div>
+                        </td>
+                        <td class="p-2.5 font-mono text-xs">
+                            ${p.singleJan}
+                            <button onclick="openPrintModal('EAN13', '${p.singleJan}', '${p.name}')" class="ml-1 text-brand-600 hover:underline">
+                                <i class="fa-solid fa-qrcode"></i>
+                            </button>
+                        </td>
+                        <td class="p-2.5 font-mono text-xs">
+                            ${p.boxCode || '<span class="text-slate-300">-</span>'}
+                            ${p.boxCode ? `<button onclick="openPrintModal('ITF14', '${p.boxCode}', '${p.name} (箱)')" class="ml-1 text-brand-600 hover:underline"><i class="fa-solid fa-qrcode"></i></button>` : ''}
+                        </td>
+                        <td class="p-2.5 text-right space-x-1">
+                            <button onclick="editProduct('${p.id}')" class="p-1 text-slate-500 hover:text-brand-600"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteProduct('${p.id}')" class="p-1 text-slate-500 hover:text-rose-600"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function openProductModal(prod = null) {
+            document.getElementById('prodId').value = prod ? prod.id : '';
+            document.getElementById('prodName').value = prod ? prod.name : '';
+            document.getElementById('prodSingleJan').value = prod ? prod.singleJan : '';
+            document.getElementById('prodBoxCode').value = prod ? prod.boxCode : '';
+            document.getElementById('prodPrice').value = prod ? prod.price : '';
+            document.getElementById('prodCaseQty').value = prod ? prod.caseQty : '';
+            document.getElementById('prodIsFavorite').checked = prod ? prod.isFavorite : false;
+
+            document.getElementById('productModalTitle').innerText = prod && prod.id ? '商品編集' : '新規商品マスター登録';
+            document.getElementById('productModal').classList.remove('hidden');
+        }
+
+        function closeProductModal() {
+            document.getElementById('productModal').classList.add('hidden');
+        }
+
+        function handleProductSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('prodId').value || Date.now().toString();
+            const name = document.getElementById('prodName').value;
+            const singleJan = document.getElementById('prodSingleJan').value;
+            const boxCode = document.getElementById('prodBoxCode').value;
+            const price = parseInt(document.getElementById('prodPrice').value, 10) || 0;
+            const caseQty = parseInt(document.getElementById('prodCaseQty').value, 10) || 0;
+            const isFavorite = document.getElementById('prodIsFavorite').checked;
+
+            const idx = productsMaster.findIndex(p => p.id === id);
+            const data = { id, name, singleJan, boxCode, price, caseQty, isFavorite };
+
+            if (idx >= 0) {
+                productsMaster[idx] = data;
+            } else {
+                productsMaster.push(data);
+            }
+
+            saveLocalStorageData();
+            renderProductsList();
+            renderFavoritesGrid();
+            closeProductModal();
+        }
+
+        function deleteProduct(id) {
+            if (confirm("マスターから削除しますか？")) {
+                productsMaster = productsMaster.filter(p => p.id !== id);
+                saveLocalStorageData();
+                renderProductsList();
+                renderFavoritesGrid();
+            }
+        }
+
+        function editProduct(id) {
+            const prod = productsMaster.find(p => p.id === id);
+            if (prod) openProductModal(prod);
+        }
+
+        function renderFavoritesGrid() {
+            const grid = document.getElementById('favoritesGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const favorites = productsMaster.filter(p => p.isFavorite);
+
+            if (favorites.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-xs text-slate-400 py-6">お気に入り登録商品がありません。</p>`;
+                return;
+            }
+
+            favorites.forEach(p => {
+                grid.innerHTML += `
+                    <div onclick="openPrintModal('EAN13', '${p.singleJan}', '${p.name}')" 
+                        class="bg-white p-3 rounded-xl border border-slate-200 hover:border-brand-500 shadow-sm active:scale-95 transition cursor-pointer flex flex-col justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-900 line-clamp-2">${p.name}</span>
+                            <span class="text-xs text-brand-700 font-black mt-1 block">¥${p.price}</span>
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-[10px] font-mono text-slate-500">
+                            <span>${p.singleJan}</span>
+                            <i class="fa-solid fa-qrcode text-brand-600 text-sm"></i>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // Print & Download Modal Logic
+        function openPrintModal(format, code, title) {
+            activeModalBarcodeData = { format, code, title };
+            document.getElementById('modalBarcodeTitle').innerText = title || 'バーコード';
+            document.getElementById('modalBarcodeSub').innerText = `規格: ${format} | コード: ${code}`;
+            document.getElementById('displayBarcodeCodeText').innerText = code;
+
+            try {
+                JsBarcode("#displayBarcodeSvg", code, {
+                    format: format === 'ITF14' ? 'ITF14' : (code.length === 8 ? 'EAN8' : 'EAN13'),
+                    width: 2,
+                    height: 70,
+                    displayValue: false
+                });
+            } catch(e) {}
+
+            document.getElementById('barcodeDisplayModal').classList.remove('hidden');
+        }
+
+        function closeBarcodeDisplayModal() {
+            document.getElementById('barcodeDisplayModal').classList.add('hidden');
+        }
+
+        function downloadBarcodeSvg() {
+            const svg = document.getElementById("displayBarcodeSvg");
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const svgBlob = new Blob([svgData], {type: "image/svg+xml;charset=utf-8"});
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const downloadLink = document.createElement("a");
+            downloadLink.href = svgUrl;
+            downloadLink.download = `JAN_${activeModalBarcodeData.code}.svg`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+
+        function printCurrentBarcodeTag() {
+            if (!activeModalBarcodeData) return;
+            document.getElementById('printName').innerText = activeModalBarcodeData.title;
+            document.getElementById('printCodeText').innerText = activeModalBarcodeData.code;
+
+            JsBarcode("#printBarcodeSvg", activeModalBarcodeData.code, {
+                format: activeModalBarcodeData.code.length === 14 ? 'ITF14' : 'EAN13',
+                width: 2,
+                height: 50,
+                displayValue: false
+            });
+
+            window.print();
+        }
+
+        function saveLocalStorageData() {
+            localStorage.setItem('jan_master_web_products', JSON.stringify(productsMaster));
+        }
+
+        function loadLocalStorageData() {
+            const prod = localStorage.getItem('jan_master_web_products');
+            if (prod) productsMaster = JSON.parse(prod);
+        }
+    </script>
+</body>
+</html>
