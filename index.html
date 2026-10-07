@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JAN Master Pro - レジ業務サポート</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- html5-qrcode: jsDelivr優先、失敗時はunpkgへ自動フォールバック -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>')</script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<style>
+.active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
+#reader video{border-radius:.75rem}
+</style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col pb-16 md:pb-0">
+
+<header class="bg-blue-600 text-white shadow-md sticky top-0 z-50">
+  <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+    <div class="flex items-center space-x-2"><i class="fa-solid fa-barcode text-2xl"></i><h1 class="font-bold text-xl tracking-wide">JAN Master Pro</h1></div>
+    <span class="text-xs bg-blue-700 px-2.5 py-1 rounded-full text-blue-100 font-medium">Webブラウザ対応</span>
+  </div>
+</header>
+
+<nav class="bg-white border-b border-slate-200 sticky top-[52px] z-40 shadow-sm overflow-x-auto">
+  <div class="max-w-4xl mx-auto flex whitespace-nowrap text-sm text-slate-600 font-medium">
+    <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center active-tab hover:bg-slate-50 transition"><i class="fa-solid fa-camera mr-1"></i>カメラ・結果</button>
+    <button onclick="switchTab('search')" id="tab-search" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-magnifying-glass mr-1"></i>検索・登録</button>
+    <button onclick="switchTab('predict')" id="tab-predict" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-boxes-packing mr-1"></i>単品⇔箱</button>
+    <button onclick="switchTab('itf')" id="tab-itf" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>ITF変換</button>
+    <button onclick="switchTab('missing')" id="tab-missing" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-circle-question mr-1"></i>欠損予測</button>
+    <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し</button>
+    <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-history mr-1"></i>履歴</button>
+  </div>
+</nav>
+
+<main class="max-w-4xl mx-auto w-full flex-grow p-4 space-y-6">
+
+  <!-- 1. SCAN -->
+  <section id="section-scan" class="space-y-4">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読み取り</h2>
+        <span id="scan-status" class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold">待機中</span>
+      </div>
+      <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[240px] flex items-center justify-center">
+        <div id="reader" class="w-full"></div>
+        <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
+          <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
+          <p class="text-sm">ボタンを押してカメラを起動してください</p>
+          <p id="https-warning" class="text-xs text-amber-300 hidden">※カメラ使用にはHTTPS接続（またはlocalhost）が必要です</p>
+        </div>
+      </div>
+      <div class="mt-3 flex gap-2">
+        <button id="btn-toggle-camera" onclick="toggleCamera()" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition">
+          <i class="fa-solid fa-power-off"></i> <span>カメラ起動</span>
+        </button>
+      </div>
+      <!-- ライト / ズーム (対応端末のみ表示) -->
+      <div id="cam-tools" class="mt-2 items-center gap-3" style="display:none">
+        <button id="btn-torch" onclick="toggleTorch()" class="px-3 py-2 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold" style="display:none"><i class="fa-solid fa-lightbulb"></i> ライト</button>
+        <label id="zoom-wrap" class="flex-1 items-center gap-2 text-xs text-slate-500" style="display:none">
+          <i class="fa-solid fa-magnifying-glass-plus"></i>
+          <input id="zoom-range" type="range" class="flex-1" oninput="setZoom(this.value)">
+        </label>
+      </div>
+    </div>
+
+    <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
+      <div class="flex justify-between items-start border-b pb-3">
+        <div>
+          <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">最新のスキャン結果</span>
+          <div class="text-2xl font-black text-slate-900 font-mono tracking-widest mt-0.5" id="scan-code-val">----</div>
+        </div>
+        <button onclick="closeScanResult()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+      <div class="bg-slate-50 p-3 rounded-lg flex flex-col items-center justify-center border border-slate-200">
+        <svg id="scan-barcode-svg" class="max-w-full"></svg>
+        <span id="barcode-error-msg" class="text-xs text-red-500 mt-1 hidden">※有効なJAN/ITFコード形式ではありません</span>
+      </div>
+      <div class="space-y-2">
+        <p class="text-xs font-semibold text-slate-500">このバーコードでアクション:</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="actionFromScan('search')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-magnifying-glass text-blue-600 text-lg"></i><div><div class="text-xs font-bold">商品検索 / 登録</div><div class="text-[10px] text-slate-500">マスターと照合</div></div>
+          </button>
+          <button onclick="actionFromScan('predict')" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i><div><div class="text-xs font-bold">単品 ⇔ 箱JAN予測</div><div class="text-[10px] text-slate-500">末尾±1を推測</div></div>
+          </button>
+          <button onclick="actionFromScan('itf')" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i><div><div class="text-xs font-bold">ITF 14桁 変換</div><div class="text-[10px] text-slate-500">ITF⇔JAN 相互計算</div></div>
+          </button>
+          <button onclick="actionFromScan('missing')" class="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
+            <i class="fa-solid fa-circle-question text-amber-600 text-lg"></i><div><div class="text-xs font-bold">欠損コード補完</div><div class="text-[10px] text-slate-500">かすれ桁の復元</div></div>
+          </button>
+        </div>
+        <button onclick="addScanToFavorite()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition mt-1">
+          <i class="fa-solid fa-layer-group text-amber-500"></i> 「JAN無し」リストに保存
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. SEARCH -->
+  <section id="section-search" class="space-y-4 hidden">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・JAN照合</h2>
+      <div class="flex gap-2">
+        <input type="text" id="search-input" oninput="searchItem()" placeholder="商品名またはJANコードを入力" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button onclick="searchItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm">検索</button>
+      </div>
+    </div>
+    <div id="search-result-list" class="space-y-3"></div>
+    <div id="form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
+        <span id="form-title"><i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録</span>
+        <button id="cancel-edit-btn" onclick="resetForm()" class="text-xs text-slate-500 hover:text-slate-700 hidden">編集をキャンセル</button>
+      </h3>
+      <form id="product-form" onsubmit="saveProduct(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="p-id" value="">
+        <div><label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
+          <input type="text" id="p-name" required placeholder="例: ○○お茶 500ml" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN (13桁/8桁) *</label>
+            <input type="text" id="p-jan" required placeholder="4901234567890" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">ケース/箱JAN・ITF</label>
+            <input type="text" id="p-boxjan" placeholder="14901234567897" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">価格 (円)</label>
+            <input type="number" id="p-price" placeholder="150" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数 (ケース個数)</label>
+            <input type="number" id="p-qty" placeholder="24" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
+          <input type="text" id="p-memo" placeholder="特売用 / 棚番: A-12" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <button type="submit" id="submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">商品データを保存</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- 3. PREDICT -->
+  <section id="section-predict" class="space-y-4 hidden">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算</h2>
+      <p class="text-xs text-slate-500">商品コード末尾の数字変化（±1等）から正確なチェックデジットを自動計算して候補を表示します。</p>
+      <div class="space-y-2">
+        <input type="text" id="predict-input" placeholder="元になるJANコード (例: 4901234567890)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">予測候補を計算</button>
+      </div>
+    </div>
+    <div id="predict-results" class="space-y-2"></div>
+  </section>
+
+  <!-- 4. ITF -->
+  <section id="section-itf" class="space-y-4 hidden">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF (14桁) / JAN (13桁) 相互変換</h2>
+      <div class="space-y-2">
+        <label class="block text-xs font-semibold text-slate-600">コード入力</label>
+        <input type="text" id="itf-input" placeholder="ITF (14桁) または JAN (13桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="convertITF('toJAN')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded-lg text-xs">ITF → JAN 変換</button>
+          <button onclick="convertITF('toITF')" class="bg-teal-800 hover:bg-teal-900 text-white font-bold py-2 rounded-lg text-xs">JAN → ITF14 変換</button>
+        </div>
+      </div>
+    </div>
+    <div id="itf-result" class="bg-white rounded-xl shadow p-4 border border-slate-200 hidden space-y-3">
+      <h3 class="font-bold text-sm text-slate-700 border-b pb-2">変換結果</h3>
+      <div class="p-3 bg-slate-50 rounded-lg space-y-1">
+        <div class="text-xs text-slate-500" id="itf-res-label">変換後コード</div>
+        <div class="text-xl font-bold font-mono text-teal-700" id="itf-res-val">---</div>
+        <div class="text-xs" id="itf-check-status">---</div>
+      </div>
+      <div class="flex justify-center bg-white p-2 border rounded"><svg id="itf-res-barcode"></svg></div>
+      <div class="grid grid-cols-2 gap-2 pt-2">
+        <button id="itf-btn-new" class="bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-plus-circle mr-1"></i> 新規登録</button>
+        <button id="itf-btn-link" class="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-link mr-1"></i> 既存商品と紐付け</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. MISSING -->
+  <section id="section-missing" class="space-y-4 hidden">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-circle-question text-amber-600"></i> 欠損JAN予測 (ワイルドカード検索)</h2>
+      <p class="text-xs text-slate-500">読みにくい文字部分を <code class="bg-slate-100 px-1 border rounded">?</code> や <code class="bg-slate-100 px-1 border rounded">*</code> に置き換えて入力してください。</p>
+      <div class="space-y-2">
+        <input type="text" id="missing-input" placeholder="例: 49012?456789? または 490123456789?" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="solveMissingJan()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg text-sm">チェックデジット適合候補を計算</button>
+      </div>
+    </div>
+    <div id="missing-results" class="space-y-2"></div>
+  </section>
+
+  <!-- 6. JAN-NASHI -->
+  <section id="section-fav" class="space-y-4 hidden">
+    <div class="flex justify-between items-center">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-500"></i> JAN無し商品リスト</h2>
+    </div>
+    <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+  </section>
+
+  <!-- 7. HISTORY -->
+  <section id="section-history" class="space-y-4 hidden">
+    <div class="flex justify-between items-center">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-history text-slate-600"></i> スキャン & 操作履歴</h2>
+      <button onclick="clearHistory()" class="text-xs text-red-600 hover:underline">履歴消去</button>
+    </div>
+    <div id="history-list" class="space-y-2"></div>
+  </section>
+</main>
+
+<!-- Barcode Modal -->
+<div id="barcode-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 id="modal-title" class="font-bold text-slate-800">バーコード表示</h3>
+      <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="bg-slate-50 p-4 rounded-xl border flex flex-col items-center justify-center"><svg id="modal-barcode-svg"></svg></div>
+    <div id="modal-subtext" class="text-xs font-mono text-slate-500"></div>
+    <button onclick="closeModal()" class="w-full bg-slate-800 text-white font-bold py-2.5 rounded-lg">閉じる</button>
+  </div>
+</div>
+
+<!-- Link Modal -->
+<div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 class="font-bold text-slate-800">既存商品に紐付け（更新）</h3>
+      <button onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <p class="text-xs text-slate-600">登録対象コード: <span id="link-code-display" class="font-mono font-bold text-blue-600"></span></p>
+    <div class="space-y-2">
+      <label class="block text-xs font-semibold text-slate-600">紐付け先の商品を選択:</label>
+      <div id="link-product-list" class="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-2 bg-slate-50"></div>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <button onclick="closeLinkModal()" class="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg text-xs">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- HTTPS CHECK ---
+if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+  const w = document.getElementById('https-warning'); if (w) w.classList.remove('hidden');
+}
+
+// --- UTIL ---
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function loadJson(key) {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) { return []; }
+}
+
+// --- DATA STORE ---
+let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
+let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
+let lastScannedCode = "", pendingLinkCode = "", lastRead = "", sameCount = 0;
+
+if (db.products.length === 0) {
+  db.products = [
+    { id: '1', name: '緑茶 500ml', jan: '4901234567890', boxJan: '14901234567897', price: 140, qty: 24, memo: '常温棚 A-1' },
+    { id: '2', name: 'ポテトチップス', jan: '4909876543210', boxJan: '14909876543217', price: 120, qty: 12, memo: 'お菓子コーナー' }
+  ];
+  saveDb();
+}
+function saveDb() {
+  try {
+    localStorage.setItem('jan_products', JSON.stringify(db.products));
+    localStorage.setItem('jan_favorites', JSON.stringify(db.favorites));
+    localStorage.setItem('jan_history', JSON.stringify(db.history));
+  } catch (_) {}
+}
+
+// --- TABS ---
+function switchTab(tabId) {
+  if (tabId !== 'scan' && isScanning) stopCamera();
+  document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active-tab'));
+  document.getElementById(`section-${tabId}`).classList.remove('hidden');
+  document.getElementById(`tab-${tabId}`).classList.add('active-tab');
+  if (tabId === 'fav') renderFavorites();
+  if (tabId === 'history') renderHistory();
+  if (tabId === 'search') renderSearchResults();
+}
+
+// --- CHECK DIGIT ---
+function calcCheckDigit(codeWithoutCD) {
+  const rev = String(codeWithoutCD).split('').reverse();
+  let sum = 0;
+  for (let i = 0; i < rev.length; i++) {
+    const n = parseInt(rev[i], 10);
+    if (isNaN(n)) return null;
+    sum += (i % 2 === 0) ? n * 3 : n;
+  }
+  return (10 - (sum % 10)) % 10;
+}
+function isValidJan(code) {
+  if (!/^(\d{8}|\d{12}|\d{13}|\d{14})$/.test(code)) return false;
+  return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
+}
+
+// =====================================================
+// CAMERA
+// =====================================================
+function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
+
+function createScanner() {
+  const F = Html5QrcodeSupportedFormats;
+  return new Html5Qrcode("reader", {
+    formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.ITF],          // 不要形式を外して誤読を減らす
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },  // 端末ネイティブ検出(高精度・高速)
+    verbose: false
+  });
+}
+
+// 誤読対策: 桁数+チェックデジット検証、同じ値を2回連続で読めたら確定
+function onDecoded(text) {
+  if (!isScanning) return;
+  let code = String(text).trim();
+  if (!/^\d+$/.test(code) || !isValidJan(code)) return;
+  if (code.length === 12) code = '0' + code; // UPC-A → 13桁
+  if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
+  if (sameCount < 2) return;
+  lastRead = ""; sameCount = 0;
+  onScanSuccess(code);
+}
+
+function cameraErrorMessage(err) {
+  const name = (err && err.name) || String(err);
+  const map = {
+    NotAllowedError: 'カメラの使用が許可されていません。ブラウザのサイト設定でカメラを「許可」にしてください。',
+    NotFoundError: 'カメラが見つかりません。',
+    NotReadableError: '他のアプリがカメラを使用中の可能性があります。他のアプリを閉じてください。',
+    OverconstrainedError: 'このカメラは指定条件に対応していません。',
+    SecurityError: 'セキュリティ制限でカメラを使えません。HTTPSで通常のブラウザから開いてください。'
+  };
+  return (map[name] || 'カメラを起動できませんでした。') + '\n\n[エラー: ' + name + ']';
+}
+
+async function startCamera() {
+  if (starting) return;
+  if (typeof Html5Qrcode === "undefined") {
+    alert("バーコードスキャンライブラリの読み込みに失敗しました。ネット接続を確認してください。");
+    return;
+  }
+  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("このページではカメラを使えません。HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。\nLINE等のアプリ内ブラウザでは動作しません。");
+    return;
+  }
+  starting = true;
+  document.getElementById('camera-placeholder').classList.add('hidden');
+  document.getElementById('scan-status').textContent = '起動中...';
+  document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
+
+  const base = {
+    fps: 15,
+    disableFlip: true,
+    qrbox: (w, h) => {
+      const m = Math.min(w, h);
+      return { width: Math.floor(Math.min(w, m * 1.6) * 0.9), height: Math.floor(m * 0.55) };
+    }
+  };
+  const hiRes = { ...base, videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } };
+
+  // 高解像度 → 背面カメラのみ → 前面/PCカメラ → カメラ一覧から選択、の順に試す
+  const attempts = [
+    () => [{ facingMode: "environment" }, hiRes],
+    () => [{ facingMode: "environment" }, base],
+    () => [{ facingMode: "user" }, base]
+  ];
+  let started = false, lastErr = null;
+  for (const make of attempts) {
+    try {
+      html5QrcodeScanner = createScanner();
+      const [cam, cfg] = make();
+      isScanning = true;
+      await html5QrcodeScanner.start(cam, cfg, onDecoded);
+      started = true;
+      break;
+    } catch (e) {
+      lastErr = e; isScanning = false;
+      try { html5QrcodeScanner.clear(); } catch (_) {}
+    }
+  }
+  if (!started) {
+    try {
+      const cams = await Html5Qrcode.getCameras();
+      if (cams && cams.length) {
+        const back = cams.find(c => /back|rear|environment|背面/i.test(c.label)) || cams[cams.length - 1];
+        html5QrcodeScanner = createScanner();
+        isScanning = true;
+        await html5QrcodeScanner.start(back.id, base, onDecoded);
+        started = true;
+      }
+    } catch (e) { lastErr = e; isScanning = false; }
+  }
+
+  starting = false;
+  if (!started) {
+    console.error("カメラ起動失敗:", lastErr);
+    alert(cameraErrorMessage(lastErr));
+    resetCameraUI();
+    return;
+  }
+  document.getElementById('btn-toggle-camera').innerHTML = '<i class="fa-solid fa-stop"></i> <span>スキャン停止</span>';
+  document.getElementById('btn-toggle-camera').className = 'flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition';
+  document.getElementById('scan-status').textContent = 'スキャン中...';
+  setupCameraTools();
+}
+
+async function setupCameraTools() {
+  // 連続オートフォーカス(未対応端末では無視される)
+  try {
+    await html5QrcodeScanner.applyVideoConstraints({
+      width: { ideal: 1920 }, height: { ideal: 1080 },
+      advanced: [{ focusMode: "continuous" }]
+    });
+  } catch (_) {}
+  try {
+    const caps = html5QrcodeScanner.getRunningTrackCameraCapabilities();
+    const torch = caps.torchFeature(), zoom = caps.zoomFeature();
+    document.getElementById('btn-torch').style.display = torch.isSupported() ? 'block' : 'none';
+    if (zoom.isSupported()) {
+      const r = document.getElementById('zoom-range');
+      r.min = zoom.min(); r.max = zoom.max(); r.step = zoom.step() || 0.1; r.value = zoom.min();
+      document.getElementById('zoom-wrap').style.display = 'flex';
+    } else {
+      document.getElementById('zoom-wrap').style.display = 'none';
+    }
+    document.getElementById('cam-tools').style.display = (torch.isSupported() || zoom.isSupported()) ? 'flex' : 'none';
+  } catch (_) {}
+}
+function toggleTorch() {
+  try { torchOn = !torchOn; html5QrcodeScanner.getRunningTrackCameraCapabilities().torchFeature().apply(torchOn); } catch (_) {}
+}
+function setZoom(v) {
+  try { html5QrcodeScanner.getRunningTrackCameraCapabilities().zoomFeature().apply(Number(v)); } catch (_) {}
+}
+
+function stopCamera() {
+  const s = html5QrcodeScanner;
+  isScanning = false;
+  html5QrcodeScanner = null;
+  if (!s) { resetCameraUI(); return; }
+  s.stop().catch(e => console.error("Stop error:", e)).finally(() => {
+    try { s.clear(); } catch (_) {}
+    resetCameraUI();
+  });
+}
+
+function resetCameraUI() {
+  isScanning = false; starting = false; torchOn = false; lastRead = ""; sameCount = 0;
+  document.getElementById('cam-tools').style.display = 'none';
+  document.getElementById('camera-placeholder').classList.remove('hidden');
+  document.getElementById('scan-status').textContent = '待機中';
+  document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold';
+  document.getElementById('btn-toggle-camera').innerHTML = '<i class="fa-solid fa-power-off"></i> <span>カメラ起動</span>';
+  document.getElementById('btn-toggle-camera').className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition';
+}
+
+function onScanSuccess(decodedText) {
+  stopCamera();
+  playBeep();
+  if (navigator.vibrate) navigator.vibrate(80);
+  lastScannedCode = decodedText;
+  addHistory('カメラ読取', decodedText);
+  document.getElementById('scan-result-card').classList.remove('hidden');
+  document.getElementById('scan-code-val').textContent = decodedText;
+  const svgEl = document.getElementById('scan-barcode-svg');
+  const errEl = document.getElementById('barcode-error-msg');
+  try {
+    let format = "EAN13";
+    if (decodedText.length === 8) format = "EAN8";
+    if (decodedText.length === 14) format = "ITF14";
+    JsBarcode(svgEl, decodedText, { format, width: 2, height: 60, displayValue: true });
+    errEl.classList.add('hidden');
+  } catch (e) {
+    try {
+      JsBarcode(svgEl, decodedText, { format: "CODE128", width: 2, height: 60, displayValue: true });
+      errEl.classList.add('hidden');
+    } catch (err) { errEl.classList.remove('hidden'); }
+  }
+}
+function closeScanResult() { document.getElementById('scan-result-card').classList.add('hidden'); }
+
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1000, ctx.currentTime);
+    osc.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch (e) {}
+}
+
+function actionFromScan(targetTab) {
+  if (!lastScannedCode) return;
+  switchTab(targetTab);
+  if (targetTab === 'search') {
+    document.getElementById('search-input').value = lastScannedCode;
+    document.getElementById('p-jan').value = lastScannedCode;
+    searchItem();
+  } else if (targetTab === 'predict') {
+    document.getElementById('predict-input').value = lastScannedCode;
+    predictBoxJan();
+  } else if (targetTab === 'itf') {
+    document.getElementById('itf-input').value = lastScannedCode;
+  } else if (targetTab === 'missing') {
+    document.getElementById('missing-input').value = lastScannedCode;
+  }
+}
+
+function addScanToFavorite() {
+  if (!lastScannedCode) return;
+  if (!db.favorites.find(f => f.jan === lastScannedCode)) {
+    db.favorites.unshift({ id: Date.now().toString(), name: 'JAN無し商品 (' + lastScannedCode + ')', jan: lastScannedCode });
+    saveDb();
+    alert('「JAN無し」リストに追加しました');
+  } else {
+    alert('既に「JAN無し」リストに追加されています');
+  }
+}
+
+// =====================================================
+// SEARCH & MASTER
+// =====================================================
+function renderSearchResults(items = db.products) {
+  const list = document.getElementById('search-result-list');
+  list.innerHTML = '';
+  if (items.length === 0) {
+    list.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">該当する商品データがありません</div>`;
+    return;
+  }
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center";
+    div.innerHTML = `
+      <div class="space-y-1">
+        <div class="font-bold text-slate-800 text-base flex items-center gap-2">
+          ${esc(item.name)}
+          <button onclick="editProduct('${esc(item.id)}')" class="text-blue-500 hover:text-blue-700 text-xs p-1" title="編集"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteProduct('${esc(item.id)}')" class="text-red-400 hover:text-red-600 text-xs p-1" title="削除"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div class="text-xs text-slate-500 font-mono space-x-2">
+          <span>単品JAN: <b>${esc(item.jan)}</b></span>
+          ${item.boxJan ? `<span class="text-indigo-600">箱JAN: <b>${esc(item.boxJan)}</b></span>` : ''}
+        </div>
+        <div class="text-xs text-slate-600 space-x-3">
+          <span>価格: ¥${esc(item.price || '-')}</span>
+          <span>入数: ${esc(item.qty || '-')}</span>
+          <span class="text-slate-400">${esc(item.memo || '')}</span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button onclick="showBarcodeModal('${esc(item.jan)}', '単品')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 単品</button>
+        ${item.boxJan ? `<button onclick="showBarcodeModal('${esc(item.boxJan)}', '箱')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 箱</button>` : ''}
+      </div>`;
+    // 商品名付きのモーダルタイトル
+    const btns = div.querySelectorAll('button[onclick^="showBarcodeModal"]');
+    btns[0].onclick = () => showBarcodeModal(item.jan, item.name + ' (単品)');
+    if (btns[1]) btns[1].onclick = () => showBarcodeModal(item.boxJan, item.name + ' (箱)');
+    list.appendChild(div);
+  });
+}
+
+function searchItem() {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  if (!q) { renderSearchResults(db.products); return; }
+  const filtered = db.products.filter(p =>
+    p.name.toLowerCase().includes(q) || p.jan.includes(q) || (p.boxJan && p.boxJan.includes(q)));
+  renderSearchResults(filtered);
+  addHistory('検索', q);
+}
+
+function editProduct(id) {
+  const item = db.products.find(p => p.id === id);
+  if (!item) return;
+  document.getElementById('p-id').value = item.id;
+  document.getElementById('p-name').value = item.name;
+  document.getElementById('p-jan').value = item.jan;
+  document.getElementById('p-boxjan').value = item.boxJan || '';
+  document.getElementById('p-price').value = item.price || '';
+  document.getElementById('p-qty').value = item.qty || '';
+  document.getElementById('p-memo').value = item.memo || '';
+  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の編集';
+  document.getElementById('submit-btn').textContent = '商品データを更新';
+  document.getElementById('cancel-edit-btn').classList.remove('hidden');
+  document.getElementById('form-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetForm() {
+  document.getElementById('p-id').value = '';
+  document.getElementById('product-form').reset();
+  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録';
+  document.getElementById('submit-btn').textContent = '商品データを保存';
+  document.getElementById('cancel-edit-btn').classList.add('hidden');
+}
+
+function deleteProduct(id) {
+  if (!confirm('この商品を削除してもよろしいですか？')) return;
+  db.products = db.products.filter(p => p.id !== id);
+  saveDb();
+  renderSearchResults();
+  alert('削除しました');
+}
+
+function saveProduct(e) {
+  e.preventDefault();
+  const id = document.getElementById('p-id').value;
+  const newP = {
+    id: id || Date.now().toString(),
+    name: document.getElementById('p-name').value,
+    jan: document.getElementById('p-jan').value.trim(),
+    boxJan: document.getElementById('p-boxjan').value.trim(),
+    price: document.getElementById('p-price').value,
+    qty: document.getElementById('p-qty').value,
+    memo: document.getElementById('p-memo').value
+  };
+  if (id) {
+    const idx = db.products.findIndex(p => p.id === id);
+    if (idx !== -1) db.products[idx] = newP;
+  } else {
+    db.products.unshift(newP);
+  }
+  saveDb();
+  alert(id ? '更新が完了しました' : '登録が完了しました');
+  resetForm();
+  renderSearchResults();
+}
+
+// =====================================================
+// 候補カード共通 (予測 / 欠損補完)
+// =====================================================
+function appendCodeCard(container, code, label, viewColor, viewTitle) {
+  const div = document.createElement('div');
+  div.className = "bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-2";
+  div.innerHTML = `
+    <div class="flex justify-between items-center">
+      <div>
+        ${label ? `<span class="text-xs font-semibold text-slate-500">${esc(label)}</span>` : ''}
+        <div class="font-mono font-bold text-slate-800 text-lg">${esc(code)}</div>
+      </div>
+      <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>
+    </div>
+    <div class="flex gap-2 border-t pt-2">
+      <button onclick="registerCodeDirect('${code}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-1 rounded text-xs font-bold border border-emerald-200"><i class="fa-solid fa-plus-circle"></i> 新規登録</button>
+      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存商品に紐付け</button>
+    </div>`;
+  container.appendChild(div);
+}
+
+// --- PREDICT ---
+function predictBoxJan() {
+  const input = document.getElementById('predict-input').value.trim();
+  const container = document.getElementById('predict-results');
+  container.innerHTML = '';
+  if (!/^\d{12,14}$/.test(input)) {
+    alert('12〜14桁の数字のJAN/ITFコードを入力してください');
+    return;
+  }
+  const body = input.slice(0, -1);
+  for (let offset = -2; offset <= 2; offset++) {
+    if (offset === 0) continue;
+    const lastNum = parseInt(body.slice(-1), 10);
+    const newLast = (lastNum + offset + 10) % 10;
+    const newBody = body.slice(0, -1) + newLast;
+    const cd = calcCheckDigit(newBody);
+    appendCodeCard(container, newBody + cd, `コード末尾 ${offset > 0 ? '+' + offset : offset}`, 'indigo', `コード末尾 ${offset > 0 ? '+' + offset : offset}`);
+  }
+  addHistory('箱JAN予測', input);
+}
+
+// --- ITF ---
+function convertITF(mode) {
+  const val = document.getElementById('itf-input').value.trim();
+  const labelEl = document.getElementById('itf-res-label');
+  const valEl = document.getElementById('itf-res-val');
+  const statusEl = document.getElementById('itf-check-status');
+  if (!val) return;
+
+  let result = "";
+  if (mode === 'toJAN') {
+    if (/^\d{14}$/.test(val)) {
+      const janBody = val.slice(1, 13);
+      result = janBody + calcCheckDigit(janBody);
+      labelEl.textContent = "JAN (13桁) 変換結果";
+    } else { alert('14桁のITFコードを入力してください'); return; }
+  } else {
+    if (/^\d{13}$/.test(val)) {
+      const itfBody = '1' + val.slice(0, 12);
+      result = itfBody + calcCheckDigit(itfBody);
+      labelEl.textContent = "ITF (14桁) 変換結果";
+    } else { alert('13桁のJANコードを入力してください'); return; }
+  }
+
+  valEl.textContent = result;
+  const ok = isValidJan(result);
+  statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
+  statusEl.className = ok ? "text-xs text-emerald-600 font-bold" : "text-xs text-red-600 font-bold";
+  document.getElementById('itf-btn-new').onclick = () => registerCodeDirect(result);
+  document.getElementById('itf-btn-link').onclick = () => openLinkModal(result);
+  document.getElementById('itf-result').classList.remove('hidden');
+  try {
+    JsBarcode("#itf-res-barcode", result, { format: result.length === 14 ? "ITF14" : "EAN13", width: 2, height: 50, displayValue: true });
+  } catch (e) {}
+  addHistory('ITF変換', `${val} -> ${result}`);
+}
+
+// --- MISSING ---
+function solveMissingJan() {
+  const raw = document.getElementById('missing-input').value.trim();
+  const container = document.getElementById('missing-results');
+  container.innerHTML = '';
+  if (!raw.includes('?') && !raw.includes('*')) {
+    alert('ワイルドカード(? または *)を含めて入力してください');
+    return;
+  }
+  const missingCount = (raw.match(/[\?\*]/g) || []).length;
+  if (missingCount > 2) {
+    alert('計算保護のため、欠損桁は最大2個までにしてください');
+    return;
+  }
+  const matches = [];
+  const max = Math.pow(10, missingCount);
+  for (let i = 0; i < max; i++) {
+    const fill = String(i).padStart(missingCount, '0');
+    let k = 0;
+    const candidate = raw.replace(/[\?\*]/g, () => fill[k++]);
+    if (isValidJan(candidate)) matches.push(candidate);
+  }
+  if (matches.length === 0) {
+    container.innerHTML = `<div class="text-center py-4 text-xs text-slate-500">条件に合う有効なJANコードが見つかりませんでした</div>`;
+    return;
+  }
+  matches.forEach(code => appendCodeCard(container, code, '', 'amber', '欠損補完コード'));
+  addHistory('欠損補完', raw);
+}
+
+// --- LINK / REGISTER ---
+function registerCodeDirect(code) {
+  switchTab('search');
+  resetForm();
+  if (code.length === 14) document.getElementById('p-boxjan').value = code;
+  else document.getElementById('p-jan').value = code;
+  document.getElementById('form-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function openLinkModal(code) {
+  pendingLinkCode = code;
+  document.getElementById('link-code-display').textContent = code;
+  const container = document.getElementById('link-product-list');
+  container.innerHTML = '';
+  if (db.products.length === 0) {
+    container.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">登録済み商品がありません</div>';
+  } else {
+    db.products.forEach(p => {
+      const btn = document.createElement('button');
+      btn.className = "w-full text-left bg-white p-2.5 rounded border border-slate-200 hover:bg-blue-50 hover:border-blue-300 transition flex justify-between items-center text-xs";
+      btn.onclick = () => executeLink(p.id);
+      btn.innerHTML = `
+        <div>
+          <div class="font-bold text-slate-800">${esc(p.name)}</div>
+          <div class="text-slate-500 font-mono text-[11px]">JAN: ${esc(p.jan)} ${p.boxJan ? '/ 箱:' + esc(p.boxJan) : ''}</div>
+        </div>
+        <span class="text-blue-600 font-bold text-xs"><i class="fa-solid fa-check"></i> 紐付け</span>`;
+      container.appendChild(btn);
+    });
+  }
+  document.getElementById('link-modal').classList.remove('hidden');
+}
+function closeLinkModal() {
+  document.getElementById('link-modal').classList.add('hidden');
+  pendingLinkCode = "";
+}
+function executeLink(productId) {
+  const item = db.products.find(p => p.id === productId);
+  if (!item) return;
+  if (pendingLinkCode.length === 14) {
+    item.boxJan = pendingLinkCode;
+  } else if (confirm(`「${item.name}」のコードを更新しますか？\n（14桁以外のため単品JANとしてセットされます）`)) {
+    item.jan = pendingLinkCode;
+  } else {
+    return;
+  }
+  const code = pendingLinkCode;
+  saveDb();
+  closeLinkModal();
+  alert(`「${item.name}」にコード ${code} を紐付けました。`);
+  switchTab('search');
+  renderSearchResults();
+}
+
+// --- JAN-NASHI ---
+function renderFavorites() {
+  const grid = document.getElementById('fav-grid');
+  grid.innerHTML = '';
+  if (db.favorites.length === 0) {
+    grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">登録された「JAN無し」商品はありません</div>`;
+    return;
+  }
+  db.favorites.forEach(fav => {
+    const card = document.createElement('div');
+    card.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-3";
+    card.innerHTML = `
+      <div class="flex justify-between items-start">
+        <div>
+          <div class="font-bold text-slate-800 text-base">${esc(fav.name)}</div>
+          <div class="text-xs font-mono text-slate-500">${esc(fav.jan)}</div>
+        </div>
+        <button onclick="removeFavorite('${esc(fav.id)}')" class="text-slate-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
+      </div>
+      <button class="fav-show w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5">
+        <i class="fa-solid fa-barcode text-base"></i> 全画面表示
+      </button>`;
+    card.querySelector('.fav-show').onclick = () => showBarcodeModal(fav.jan, fav.name);
+    grid.appendChild(card);
+  });
+}
+function removeFavorite(id) {
+  db.favorites = db.favorites.filter(f => f.id !== id);
+  saveDb();
+  renderFavorites();
+}
+
+// --- HISTORY ---
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '';
+  if (db.history.length === 0) {
+    list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">履歴はありません</div>`;
+    return;
+  }
+  db.history.forEach(item => {
+    const div = document.createElement('div');
+    div.className = "bg-white px-4 py-3 rounded-lg border border-slate-200 flex justify-between items-center text-xs";
+    div.innerHTML = `
+      <div class="space-x-2">
+        <span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-medium">${esc(item.type)}</span>
+        <span class="font-mono font-bold text-slate-800">${esc(item.val)}</span>
+      </div>
+      <span class="text-slate-400">${esc(item.time)}</span>`;
+    list.appendChild(div);
+  });
+}
+function addHistory(type, val) {
+  const now = new Date();
+  const timeStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2, '0')}`;
+  db.history.unshift({ type, val, time: timeStr });
+  if (db.history.length > 30) db.history.pop();
+  saveDb();
+}
+function clearHistory() { db.history = []; saveDb(); renderHistory(); }
+
+// --- MODAL ---
+function showBarcodeModal(code, title) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-subtext').textContent = code;
+  document.getElementById('barcode-modal').classList.remove('hidden');
+  try {
+    let format = "EAN13";
+    if (code.length === 8) format = "EAN8";
+    if (code.length === 14) format = "ITF14";
+    JsBarcode("#modal-barcode-svg", code, { format, width: 2.5, height: 80, displayValue: true });
+  } catch (e) {
+    try { JsBarcode("#modal-barcode-svg", code, { format: "CODE128", width: 2.5, height: 80, displayValue: true }); } catch (_) {}
+  }
+}
+function closeModal() { document.getElementById('barcode-modal').classList.add('hidden'); }
+</script>
+</body>
+</html>
