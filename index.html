@@ -61,8 +61,7 @@
   <div class="max-w-4xl mx-auto flex whitespace-nowrap text-sm text-slate-600 font-medium">
     <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center active-tab hover:bg-slate-50 transition"><i class="fa-solid fa-camera mr-1"></i>カメラ・結果</button>
     <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し</button>
-    <button onclick="switchTab('search')" id="tab-search" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-magnifying-glass mr-1"></i>検索・登録</button>
-    <button onclick="switchTab('predict')" id="tab-predict" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-boxes-packing mr-1"></i>単品⇔箱</button>
+    <button onclick="switchTab('predict')" id="tab-predict" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-boxes-packing mr-1"></i>単品⇔箱・管理</button>
     <button onclick="switchTab('itf')" id="tab-itf" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>ITF変換</button>
     <button onclick="switchTab('missing')" id="tab-missing" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-circle-question mr-1"></i>欠損予測</button>
     <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-history mr-1"></i>履歴</button>
@@ -82,7 +81,7 @@
         <div id="reader" class="w-full"></div>
         <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
           <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
-          <p class="text-xs text-slate-400">JAN13 / JAN8 / ITF14 読み取り対応</p>
+          <p class="text-xs text-slate-400">JAN13 / JAN8 / ITF14 高感度自動読み取り</p>
         </div>
       </div>
       <div class="mt-3 flex gap-2">
@@ -99,6 +98,7 @@
       </div>
     </div>
 
+    <!-- スキャン結果カード (3つの選択肢に絞り込み) -->
     <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
       <div class="flex justify-between items-start border-b pb-3">
         <div>
@@ -113,45 +113,40 @@
       </div>
       <div class="space-y-2">
         <div class="grid grid-cols-2 gap-2">
-          <button onclick="actionFromScan('search')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-magnifying-glass text-blue-600 text-lg"></i><div class="text-xs font-bold">商品検索 / 登録</div>
-          </button>
           <button onclick="actionFromScan('predict')" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
             <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i><div class="text-xs font-bold">単品 ⇔ 箱JAN予測</div>
           </button>
           <button onclick="actionFromScan('itf')" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
             <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i><div class="text-xs font-bold">ITF 14桁 変換</div>
           </button>
-          <button onclick="actionFromScan('missing')" class="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-circle-question text-amber-600 text-lg"></i><div class="text-xs font-bold">欠損コード補完</div>
-          </button>
         </div>
-        <button onclick="addScanToFavorite()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition mt-1">
-          <i class="fa-solid fa-layer-group text-amber-500"></i> 「JAN無し」リストに保存
+        <button onclick="openScanToFavModal()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition">
+          <i class="fa-solid fa-layer-group text-amber-500"></i> 「JAN無し」リストに保存 (写真撮影可)
         </button>
       </div>
     </div>
   </section>
 
-  <!-- 2. JAN-NASHI (写真・名前登録機能を追加) -->
+  <!-- 2. JAN-NASHI (写真・名前編集機能追加／JANコード表記変更) -->
   <section id="section-fav" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <div class="flex justify-between items-center">
         <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-500"></i> JAN無し商品管理</h2>
-        <button onclick="toggleFavForm()" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
+        <button onclick="openFavForm(null)" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition">
           <i class="fa-solid fa-plus"></i> 新規追加
         </button>
       </div>
 
-      <!-- 新規登録フォーム -->
+      <!-- 新規・編集フォーム -->
       <div id="fav-form-container" class="hidden bg-amber-50/50 p-3.5 rounded-lg border border-amber-200 space-y-3 text-sm">
-        <h3 class="font-bold text-amber-900 text-xs flex items-center gap-1"><i class="fa-solid fa-pen"></i> JAN無し商品の登録</h3>
+        <h3 id="fav-form-title" class="font-bold text-amber-900 text-xs flex items-center gap-1"><i class="fa-solid fa-pen"></i> JAN無し商品の登録</h3>
+        <input type="hidden" id="fav-input-id" value="">
         <div>
           <label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
           <input type="text" id="fav-input-name" placeholder="例：特売キャベツ 1玉" class="w-full border rounded-lg px-3 py-1.5 text-sm">
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-600 mb-1">識別コード/型番 (任意)</label>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">JANコード (任意)</label>
           <input type="text" id="fav-input-jan" placeholder="自動採番または独自コード" class="w-full border rounded-lg px-3 py-1.5 text-sm font-mono">
         </div>
         <div>
@@ -159,12 +154,12 @@
           <input type="file" id="fav-input-image" accept="image/*" onchange="previewFavImage(this)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200">
           <div id="fav-img-preview-wrap" class="mt-2 hidden flex items-center gap-2">
             <img id="fav-img-preview" class="w-16 h-16 object-cover rounded-lg border">
-            <button type="button" onclick="clearFavImage()" class="text-xs text-red-500 hover:underline">削除</button>
+            <button type="button" onclick="clearFavImage()" class="text-xs text-red-500 hover:underline">画像を削除</button>
           </div>
         </div>
         <div class="flex gap-2 justify-end pt-1">
-          <button onclick="toggleFavForm()" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">キャンセル</button>
-          <button onclick="saveCustomFavorite()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg">登録保存</button>
+          <button onclick="closeFavForm()" class="px-3 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg">キャンセル</button>
+          <button onclick="saveCustomFavorite()" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg">保存</button>
         </div>
       </div>
 
@@ -176,45 +171,7 @@
     <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
   </section>
 
-  <!-- 3. SEARCH -->
-  <section id="section-search" class="space-y-4 hidden">
-    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・照合</h2>
-      <div class="flex gap-2">
-        <input type="text" id="search-input" oninput="searchItem()" placeholder="商品名またはJANコード" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <button onclick="searchItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm">検索</button>
-      </div>
-    </div>
-    <div id="search-result-list" class="space-y-3"></div>
-    <div id="form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
-        <span id="form-title"><i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規登録</span>
-        <button id="cancel-edit-btn" onclick="resetForm()" class="text-xs text-slate-500 hover:text-slate-700 hidden">キャンセル</button>
-      </h3>
-      <form id="product-form" onsubmit="saveProduct(event)" class="space-y-3 text-sm">
-        <input type="hidden" id="p-id" value="">
-        <div><label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
-          <input type="text" id="p-name" required placeholder="商品名" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN *</label>
-            <input type="text" id="p-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN・ITF</label>
-            <input type="text" id="p-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
-            <input type="number" id="p-price" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数</label>
-            <input type="number" id="p-qty" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        </div>
-        <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
-          <input type="text" id="p-memo" placeholder="メモ" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        <button type="submit" id="submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">保存</button>
-      </form>
-    </div>
-  </section>
-
-  <!-- 4. PREDICT -->
+  <!-- 3. PREDICT & MANAGEMENT (単品⇔箱JAN予測 ＋ 検索・修正機能) -->
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
@@ -224,9 +181,46 @@
       </div>
     </div>
     <div id="predict-results" class="space-y-2"></div>
+
+    <!-- 商品管理・検索・修正枠 -->
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2 border-b pb-2"><i class="fa-solid fa-sliders text-blue-600"></i> 登録商品の検索・修正</h3>
+      <div class="flex gap-2">
+        <input type="text" id="manage-search-input" oninput="searchManageItem()" placeholder="商品名またはJANコード" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+      <div id="manage-result-list" class="space-y-2 pt-1"></div>
+    </div>
+
+    <!-- 編集フォーム -->
+    <div id="manage-form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3 hidden">
+      <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
+        <span><i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の修正</span>
+        <button onclick="closeManageForm()" class="text-xs text-slate-500 hover:text-slate-700">キャンセル</button>
+      </h3>
+      <form id="manage-product-form" onsubmit="saveManageProduct(event)" class="space-y-3 text-sm">
+        <input type="hidden" id="mp-id" value="">
+        <div><label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
+          <input type="text" id="mp-name" required placeholder="商品名" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN *</label>
+            <input type="text" id="mp-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN・ITF</label>
+            <input type="text" id="mp-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
+            <input type="number" id="mp-price" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数</label>
+            <input type="number" id="mp-qty" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
+          <input type="text" id="mp-memo" placeholder="メモ" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">変更を保存</button>
+      </form>
+    </div>
   </section>
 
-  <!-- 5. ITF -->
+  <!-- 4. ITF -->
   <section id="section-itf" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF / JAN 相互変換</h2>
@@ -245,14 +239,10 @@
         <div class="text-xs" id="itf-check-status">---</div>
       </div>
       <div class="flex justify-center bg-white p-2 border rounded"><svg id="itf-res-barcode"></svg></div>
-      <div class="grid grid-cols-2 gap-2 pt-2">
-        <button id="itf-btn-new" class="bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-plus-circle mr-1"></i> 新規登録</button>
-        <button id="itf-btn-link" class="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-xs font-bold"><i class="fa-solid fa-link mr-1"></i> 既存商品と紐付け</button>
-      </div>
     </div>
   </section>
 
-  <!-- 6. MISSING -->
+  <!-- 5. MISSING -->
   <section id="section-missing" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-circle-question text-amber-600"></i> 欠損JAN予測</h2>
@@ -264,7 +254,7 @@
     <div id="missing-results" class="space-y-2"></div>
   </section>
 
-  <!-- 7. HISTORY -->
+  <!-- 6. HISTORY -->
   <section id="section-history" class="space-y-4 hidden">
     <div class="flex justify-between items-center">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-history text-slate-600"></i> 履歴</h2>
@@ -276,7 +266,7 @@
 
 <!-- Modals -->
 
-<!-- 簡単箱計算モーダル (切り替え機能追加) -->
+<!-- 簡単箱計算モーダル -->
 <div id="calc-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -284,7 +274,6 @@
       <button onclick="toggleCalcModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
     
-    <!-- 切り替えタブボタン -->
     <div class="flex bg-slate-100 p-1 rounded-xl gap-1">
       <button id="calc-mode-box" onclick="setCalcMode('box')" class="flex-1 py-1.5 text-xs font-bold rounded-lg bg-white shadow-sm text-blue-600">単品 ➔ 箱価格</button>
       <button id="calc-mode-unit" onclick="setCalcMode('unit')" class="flex-1 py-1.5 text-xs font-bold rounded-lg text-slate-600">箱 ➔ 単品価格</button>
@@ -317,22 +306,6 @@
     <div class="bg-slate-50 p-4 rounded-xl border flex flex-col items-center justify-center"><svg id="modal-barcode-svg"></svg></div>
     <div id="modal-subtext" class="text-xs font-mono text-slate-500"></div>
     <button onclick="closeModal()" class="w-full bg-slate-800 text-white font-bold py-2.5 rounded-lg">閉じる</button>
-  </div>
-</div>
-
-<div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-  <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
-    <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800">商品紐付け</h3>
-      <button onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
-    </div>
-    <p class="text-xs text-slate-600">対象コード: <span id="link-code-display" class="font-mono font-bold text-blue-600"></span></p>
-    <div class="space-y-2">
-      <div id="link-product-list" class="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-2 bg-slate-50"></div>
-    </div>
-    <div class="flex justify-end gap-2 pt-2">
-      <button onclick="closeLinkModal()" class="px-4 py-2 bg-slate-200 text-slate-700 font-bold rounded-lg text-xs">キャンセル</button>
-    </div>
   </div>
 </div>
 
@@ -373,8 +346,8 @@ let currentGroupId = localStorage.getItem('jan_group_id') || null;
 let unsubscribeSnapshot = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
 let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
-let lastScannedCode = "", pendingLinkCode = "", lastRead = "", sameCount = 0;
-let calcMode = 'box'; // 'box': 単品->箱, 'unit': 箱->単品
+let lastScannedCode = "", lastRead = "", sameCount = 0;
+let calcMode = 'box';
 let currentBase64Image = "";
 
 if (db.products.length === 0) {
@@ -438,8 +411,8 @@ function startGroupSync(groupId) {
       if (data.products) db.products = data.products;
       if (data.favorites) db.favorites = data.favorites;
       saveDbToLocalOnly();
-      renderSearchResults();
       renderFavorites();
+      searchManageItem();
     } else {
       saveDb();
     }
@@ -464,13 +437,8 @@ function saveDbToLocalOnly() {
   } catch (_) {}
 }
 
-function toggleAccountModal() {
-  document.getElementById('account-modal').classList.toggle('hidden');
-}
-
-function toggleCalcModal() {
-  document.getElementById('calc-modal').classList.toggle('hidden');
-}
+function toggleAccountModal() { document.getElementById('account-modal').classList.toggle('hidden'); }
+function toggleCalcModal() { document.getElementById('calc-modal').classList.toggle('hidden'); }
 
 function setCalcMode(mode) {
   calcMode = mode;
@@ -496,14 +464,7 @@ function setCalcMode(mode) {
 function runQuickCalc() {
   const inputVal = parseFloat(document.getElementById('quick-price').value) || 0;
   const q = parseFloat(document.getElementById('quick-qty').value) || 0;
-  let total = 0;
-
-  if (calcMode === 'box') {
-    total = inputVal * q;
-  } else {
-    total = q > 0 ? (inputVal / q) : 0;
-  }
-
+  let total = (calcMode === 'box') ? (inputVal * q) : (q > 0 ? (inputVal / q) : 0);
   document.getElementById('quick-total-display').textContent = '¥' + Math.round(total).toLocaleString();
 }
 
@@ -515,7 +476,7 @@ function switchTab(tabId) {
   document.getElementById(`tab-${tabId}`).classList.add('active-tab');
   if (tabId === 'fav') renderFavorites();
   if (tabId === 'history') renderHistory();
-  if (tabId === 'search') renderSearchResults();
+  if (tabId === 'predict') searchManageItem();
 }
 
 function calcCheckDigit(codeWithoutCD) {
@@ -533,12 +494,11 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-// 読み込みやすさ・解像度最適化型スキャナー
+/* カメラ精度・解像度・光調整の最適化スキャナー */
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner() {
   const F = Html5QrcodeSupportedFormats;
-  // 高精度化のため対話型バーコードの種別を13JAN, 8JAN, ITF14に特定絞り込み
   return new Html5Qrcode("reader", {
     formatsToSupport: [F.EAN_13, F.EAN_8, F.ITF],          
     experimentalFeatures: { useBarCodeDetectorIfSupported: true },  
@@ -569,24 +529,22 @@ async function startCamera() {
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
   const baseConfig = {
-    fps: 25,
-    qrbox: (w, h) => {
-      // 広範囲にスキャンして離れていても合わせやすい画角に調整
-      return { width: Math.floor(w * 0.85), height: Math.floor(h * 0.55) };
-    },
+    fps: 30, // 密度向上と高速認識のためフレームレート向上
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.85), height: Math.floor(h * 0.5) }),
     aspectRatio: 1.0
   };
   
-  // スマホのメイン背面カメラを高画質(Full HD)で優先的に要求
+  // 高解像度・フォーカス・露出補正を含む高度カメラパラメーター
   const hiResConstraints = { 
     facingMode: "environment", 
     width: { ideal: 1920, min: 1280 }, 
     height: { ideal: 1080, min: 720 },
-    focusMode: "continuous"
+    focusMode: { ideal: "continuous" },
+    exposureMode: { ideal: "continuous" }
   };
 
-  // 起動保証のための段階的フォールバック設定
   const attempts = [
+    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: hiResConstraints }],
     () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: hiResConstraints }],
     () => [{ facingMode: "environment" }, baseConfig],
     () => [true, baseConfig]
@@ -609,7 +567,7 @@ async function startCamera() {
 
   starting = false;
   if (!started) {
-    alert("カメラを起動できませんでした。ブラウザのカメラ権限または環境を確認してください。");
+    alert("カメラを起動できませんでした。権限またはカメラ環境を確認してください。");
     resetCameraUI();
     return;
   }
@@ -703,155 +661,32 @@ function playBeep() {
 function actionFromScan(targetTab) {
   if (!lastScannedCode) return;
   switchTab(targetTab);
-  if (targetTab === 'search') {
-    document.getElementById('search-input').value = lastScannedCode;
-    document.getElementById('p-jan').value = lastScannedCode;
-    searchItem();
-  } else if (targetTab === 'predict') {
+  if (targetTab === 'predict') {
     document.getElementById('predict-input').value = lastScannedCode;
     predictBoxJan();
   } else if (targetTab === 'itf') {
     document.getElementById('itf-input').value = lastScannedCode;
-  } else if (targetTab === 'missing') {
-    document.getElementById('missing-input').value = lastScannedCode;
   }
 }
 
-function addScanToFavorite() {
+function openScanToFavModal() {
   if (!lastScannedCode) return;
-  if (db.favorites.find(f => f.jan === lastScannedCode)) {
-    alert('すでに保存済みです');
-    return;
-  }
-  const name = prompt('商品名を入力してください', 'JAN無し商品 (' + lastScannedCode + ')');
-  if (name === null) return; // キャンセルされた場合
-
-  db.favorites.unshift({ 
-    id: Date.now().toString(), 
-    name: name.trim() || ('JAN無し (' + lastScannedCode + ')'), 
-    jan: lastScannedCode,
-    image: "" 
-  });
-  saveDb();
-  alert('保存しました');
-}
-
-function renderSearchResults(items = db.products) {
-  const list = document.getElementById('search-result-list');
-  list.innerHTML = '';
-  if (items.length === 0) {
-    list.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">データなし</div>`;
-    return;
-  }
-  items.forEach(item => {
-    const div = document.createElement('div');
-    div.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center";
-    div.innerHTML = `
-      <div class="space-y-1">
-        <div class="font-bold text-slate-800 text-base flex items-center gap-2">
-          ${esc(item.name)}
-          <button onclick="editProduct('${esc(item.id)}')" class="text-blue-500 hover:text-blue-700 text-xs p-1"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteProduct('${esc(item.id)}')" class="text-red-400 hover:text-red-600 text-xs p-1"><i class="fa-solid fa-trash"></i></button>
-        </div>
-        <div class="text-xs text-slate-500 font-mono space-x-2">
-          <span>JAN: <b>${esc(item.jan)}</b></span>
-          ${item.boxJan ? `<span class="text-indigo-600">箱JAN: <b>${esc(item.boxJan)}</b></span>` : ''}
-        </div>
-        <div class="text-xs text-slate-600 space-x-2">
-          <span>¥${esc(item.price || '-')}</span>
-          <span>入数: ${esc(item.qty || '-')}</span>
-        </div>
-        ${item.memo ? `<div class="text-[11px] text-slate-400">${esc(item.memo)}</div>` : ''}
-      </div>
-      <div class="flex flex-col gap-2">
-        <button onclick="showBarcodeModal('${esc(item.jan)}', '${esc(item.name)} (単品)')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 単品</button>
-        ${item.boxJan ? `<button onclick="showBarcodeModal('${esc(item.boxJan)}', '${esc(item.name)} (箱)')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 箱</button>` : ''}
-      </div>`;
-    list.appendChild(div);
-  });
-}
-
-function searchItem() {
-  const q = document.getElementById('search-input').value.trim().toLowerCase();
-  if (!q) { renderSearchResults(db.products); return; }
-  const filtered = db.products.filter(p =>
-    p.name.toLowerCase().includes(q) || p.jan.includes(q) || (p.boxJan && p.boxJan.includes(q)));
-  renderSearchResults(filtered);
-  addHistory('検索', q);
-}
-
-function editProduct(id) {
-  const item = db.products.find(p => p.id === id);
-  if (!item) return;
-  document.getElementById('p-id').value = item.id;
-  document.getElementById('p-name').value = item.name;
-  document.getElementById('p-jan').value = item.jan;
-  document.getElementById('p-boxjan').value = item.boxJan || '';
-  document.getElementById('p-price').value = item.price || '';
-  document.getElementById('p-qty').value = item.qty || '';
-  document.getElementById('p-memo').value = item.memo || '';
-  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 編集';
-  document.getElementById('submit-btn').textContent = '更新';
-  document.getElementById('cancel-edit-btn').classList.remove('hidden');
-  document.getElementById('form-container').scrollIntoView({ behavior: 'smooth' });
-}
-
-function resetForm() {
-  document.getElementById('p-id').value = '';
-  document.getElementById('product-form').reset();
-  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規登録';
-  document.getElementById('submit-btn').textContent = '保存';
-  document.getElementById('cancel-edit-btn').classList.add('hidden');
-}
-
-function deleteProduct(id) {
-  if (!confirm('削除しますか？')) return;
-  db.products = db.products.filter(p => p.id !== id);
-  saveDb();
-  renderSearchResults();
-}
-
-function saveProduct(e) {
-  e.preventDefault();
-  const id = document.getElementById('p-id').value;
-  const newP = {
-    id: id || Date.now().toString(),
-    name: document.getElementById('p-name').value,
-    jan: document.getElementById('p-jan').value.trim(),
-    boxJan: document.getElementById('p-boxjan').value.trim(),
-    price: document.getElementById('p-price').value,
-    qty: document.getElementById('p-qty').value,
-    memo: document.getElementById('p-memo').value
-  };
-  if (id) {
-    const idx = db.products.findIndex(p => p.id === id);
-    if (idx !== -1) db.products[idx] = newP;
-  } else {
-    db.products.unshift(newP);
-  }
-  saveDb();
-  resetForm();
-  renderSearchResults();
+  switchTab('fav');
+  openFavForm(null, lastScannedCode);
 }
 
 function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText = '') {
   const div = document.createElement('div');
-  div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2 shadow-sm";
+  div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm";
   div.innerHTML = `
-    <div class="flex justify-between items-center">
-      <div>
-        <div class="flex items-center gap-1.5 mb-0.5">
-          ${label ? `<span class="text-xs font-bold text-slate-700">${esc(label)}</span>` : ''}
-          ${badgeText ? `<span class="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">${esc(badgeText)}</span>` : ''}
-        </div>
-        <div class="font-mono font-black text-slate-900 text-xl tracking-wide">${esc(code)}</div>
+    <div>
+      <div class="flex items-center gap-1.5 mb-0.5">
+        ${label ? `<span class="text-xs font-bold text-slate-700">${esc(label)}</span>` : ''}
+        ${badgeText ? `<span class="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">${esc(badgeText)}</span>` : ''}
       </div>
-      <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 border border-${viewColor}-200 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>
+      <div class="font-mono font-black text-slate-900 text-xl tracking-wide">${esc(code)}</div>
     </div>
-    <div class="flex gap-2 border-t pt-2">
-      <button onclick="registerCodeDirect('${code}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-1 rounded-lg text-xs font-bold border border-emerald-200"><i class="fa-solid fa-plus-circle"></i> 新規登録</button>
-      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded-lg text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存紐付け</button>
-    </div>`;
+    <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 border border-${viewColor}-200 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>`;
   container.appendChild(div);
 }
 
@@ -883,6 +718,84 @@ function predictBoxJan() {
   addHistory('箱JAN予測(±1)', input);
 }
 
+/* 単品⇔箱JAN予測ページ内の検索・修正管理枠 */
+function searchManageItem() {
+  const q = (document.getElementById('manage-search-input')?.value || '').trim().toLowerCase();
+  const list = document.getElementById('manage-result-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  let items = db.products;
+  if (q) {
+    items = items.filter(p => p.name.toLowerCase().includes(q) || p.jan.includes(q) || (p.boxJan && p.boxJan.includes(q)));
+  }
+
+  if (items.length === 0) {
+    list.innerHTML = `<div class="text-center py-4 text-slate-400 text-xs">データがありません</div>`;
+    return;
+  }
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = "bg-slate-50 p-3 rounded-lg border border-slate-200 flex justify-between items-center text-xs";
+    div.innerHTML = `
+      <div class="space-y-1">
+        <div class="font-bold text-slate-800 text-sm">${esc(item.name)}</div>
+        <div class="font-mono text-slate-500">JAN: <b>${esc(item.jan)}</b> ${item.boxJan ? `/ 箱: <b>${esc(item.boxJan)}</b>` : ''}</div>
+        <div class="text-slate-500">¥${esc(item.price || '-')} | 入数: ${esc(item.qty || '-')}</div>
+      </div>
+      <div class="flex gap-1.5">
+        <button onclick="editManageProduct('${esc(item.id)}')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-2.5 py-1.5 rounded font-bold">編集</button>
+        <button onclick="deleteManageProduct('${esc(item.id)}')" class="bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1.5 rounded"><i class="fa-solid fa-trash"></i></button>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function editManageProduct(id) {
+  const item = db.products.find(p => p.id === id);
+  if (!item) return;
+  document.getElementById('mp-id').value = item.id;
+  document.getElementById('mp-name').value = item.name;
+  document.getElementById('mp-jan').value = item.jan;
+  document.getElementById('mp-boxjan').value = item.boxJan || '';
+  document.getElementById('mp-price').value = item.price || '';
+  document.getElementById('mp-qty').value = item.qty || '';
+  document.getElementById('mp-memo').value = item.memo || '';
+  document.getElementById('manage-form-container').classList.remove('hidden');
+  document.getElementById('manage-form-container').scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeManageForm() {
+  document.getElementById('manage-form-container').classList.add('hidden');
+}
+
+function deleteManageProduct(id) {
+  if (!confirm('削除しますか？')) return;
+  db.products = db.products.filter(p => p.id !== id);
+  saveDb();
+  searchManageItem();
+}
+
+function saveManageProduct(e) {
+  e.preventDefault();
+  const id = document.getElementById('mp-id').value;
+  const newP = {
+    id: id || Date.now().toString(),
+    name: document.getElementById('mp-name').value,
+    jan: document.getElementById('mp-jan').value.trim(),
+    boxJan: document.getElementById('mp-boxjan').value.trim(),
+    price: document.getElementById('mp-price').value,
+    qty: document.getElementById('mp-qty').value,
+    memo: document.getElementById('mp-memo').value
+  };
+  const idx = db.products.findIndex(p => p.id === id);
+  if (idx !== -1) db.products[idx] = newP;
+  saveDb();
+  closeManageForm();
+  searchManageItem();
+}
+
 function convertITF(mode) {
   const val = document.getElementById('itf-input').value.trim();
   const labelEl = document.getElementById('itf-res-label');
@@ -909,8 +822,6 @@ function convertITF(mode) {
   const ok = isValidJan(result);
   statusEl.textContent = ok ? "✓ 正常" : "× チェックデジット不整合";
   statusEl.className = ok ? "text-xs text-emerald-600 font-bold" : "text-xs text-red-600 font-bold";
-  document.getElementById('itf-btn-new').onclick = () => registerCodeDirect(result);
-  document.getElementById('itf-btn-link').onclick = () => openLinkModal(result);
   document.getElementById('itf-result').classList.remove('hidden');
   try {
     JsBarcode("#itf-res-barcode", result, { format: result.length === 14 ? "ITF14" : "EAN13", width: 2, height: 50, displayValue: true });
@@ -947,69 +858,49 @@ function solveMissingJan() {
   addHistory('欠損補完', raw);
 }
 
-function registerCodeDirect(code) {
-  switchTab('search');
-  resetForm();
-  if (code.length === 14) document.getElementById('p-boxjan').value = code;
-  else document.getElementById('p-jan').value = code;
-  document.getElementById('form-container').scrollIntoView({ behavior: 'smooth' });
-}
-
-function openLinkModal(code) {
-  pendingLinkCode = code;
-  document.getElementById('link-code-display').textContent = code;
-  const container = document.getElementById('link-product-list');
-  container.innerHTML = '';
-  if (db.products.length === 0) {
-    container.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">データなし</div>';
-  } else {
-    db.products.forEach(p => {
-      const btn = document.createElement('button');
-      btn.className = "w-full text-left bg-white p-2.5 rounded border border-slate-200 hover:bg-blue-50 hover:border-blue-300 transition flex justify-between items-center text-xs";
-      btn.onclick = () => executeLink(p.id);
-      btn.innerHTML = `
-        <div>
-          <div class="font-bold text-slate-800">${esc(p.name)}</div>
-          <div class="text-slate-500 font-mono text-[11px]">JAN: ${esc(p.jan)} ${p.boxJan ? '/ 箱:' + esc(p.boxJan) : ''}</div>
-        </div>
-        <span class="text-blue-600 font-bold text-xs"><i class="fa-solid fa-check"></i> 紐付け</span>`;
-      container.appendChild(btn);
-    });
-  }
-  document.getElementById('link-modal').classList.remove('hidden');
-}
-function closeLinkModal() {
-  document.getElementById('link-modal').classList.add('hidden');
-  pendingLinkCode = "";
-}
-function executeLink(productId) {
-  const item = db.products.find(p => p.id === productId);
-  if (!item) return;
-  if (pendingLinkCode.length === 14) {
-    item.boxJan = pendingLinkCode;
-  } else if (confirm(`「${item.name}」にセットしますか？`)) {
-    item.jan = pendingLinkCode;
-  } else {
-    return;
-  }
-  saveDb();
-  closeLinkModal();
-  switchTab('search');
-  renderSearchResults();
-}
-
-/* JAN無し機能（拡張） */
-function toggleFavForm() {
+/* JAN無し機能（名前・写真の新規および編集対応） */
+function openFavForm(id = null, presetJan = '') {
   const form = document.getElementById('fav-form-container');
-  form.classList.toggle('hidden');
-  if (form.classList.contains('hidden')) clearFavForm();
+  form.classList.remove('hidden');
+
+  if (id) {
+    // 編集モード
+    const item = db.favorites.find(f => f.id === id);
+    if (!item) return;
+    document.getElementById('fav-form-title').innerHTML = '<i class="fa-solid fa-pen"></i> JAN無し商品の編集';
+    document.getElementById('fav-input-id').value = item.id;
+    document.getElementById('fav-input-name').value = item.name;
+    document.getElementById('fav-input-jan').value = item.jan;
+    currentBase64Image = item.image || '';
+    if (currentBase64Image) {
+      document.getElementById('fav-img-preview').src = currentBase64Image;
+      document.getElementById('fav-img-preview-wrap').classList.remove('hidden');
+    } else {
+      clearFavImage();
+    }
+  } else {
+    // 新規追加モード
+    document.getElementById('fav-form-title').innerHTML = '<i class="fa-solid fa-plus"></i> JAN無し商品の登録';
+    document.getElementById('fav-input-id').value = '';
+    document.getElementById('fav-input-name').value = presetJan ? `商品 (${presetJan})` : '';
+    document.getElementById('fav-input-jan').value = presetJan;
+    clearFavImage();
+  }
+  form.scrollIntoView({ behavior: 'smooth' });
+}
+
+function closeFavForm() {
+  document.getElementById('fav-form-container').classList.add('hidden');
+  document.getElementById('fav-input-id').value = '';
+  document.getElementById('fav-input-name').value = '';
+  document.getElementById('fav-input-jan').value = '';
+  clearFavImage();
 }
 
 function previewFavImage(input) {
   if (input.files && input.files[0]) {
     const reader = new FileReader();
     reader.onload = function(e) {
-      // 保存用にリサイズ圧縮してBase64化
       const img = new Image();
       img.src = e.target.result;
       img.onload = () => {
@@ -1035,13 +926,8 @@ function clearFavImage() {
   document.getElementById('fav-img-preview-wrap').classList.add('hidden');
 }
 
-function clearFavForm() {
-  document.getElementById('fav-input-name').value = "";
-  document.getElementById('fav-input-jan').value = "";
-  clearFavImage();
-}
-
 function saveCustomFavorite() {
+  const id = document.getElementById('fav-input-id').value;
   const name = document.getElementById('fav-input-name').value.trim();
   let jan = document.getElementById('fav-input-jan').value.trim();
   if (!name) return alert('商品名を入力してください');
@@ -1050,15 +936,24 @@ function saveCustomFavorite() {
     jan = 'NOJAN-' + Date.now().toString().slice(-6);
   }
 
-  db.favorites.unshift({
-    id: Date.now().toString(),
-    name,
-    jan,
-    image: currentBase64Image
-  });
+  if (id) {
+    // 既存データの更新
+    const idx = db.favorites.findIndex(f => f.id === id);
+    if (idx !== -1) {
+      db.favorites[idx] = { id, name, jan, image: currentBase64Image };
+    }
+  } else {
+    // 新規データの追加
+    db.favorites.unshift({
+      id: Date.now().toString(),
+      name,
+      jan,
+      image: currentBase64Image
+    });
+  }
+
   saveDb();
-  clearFavForm();
-  toggleFavForm();
+  closeFavForm();
   renderFavorites();
 }
 
@@ -1081,12 +976,15 @@ function renderFavorites() {
     card.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-3";
     card.innerHTML = `
       <div class="flex gap-3 items-start">
-        ${fav.image ? `<img src="${fav.image}" class="w-16 h-16 object-cover rounded-lg border border-slate-200 flex-shrink-0">` : ''}
-        <div class="flex-1">
-          <div class="font-bold text-slate-800 text-base">${esc(fav.name)}</div>
-          <div class="text-xs font-mono text-slate-500">${esc(fav.jan)}</div>
+        ${fav.image ? `<img src="${fav.image}" class="w-16 h-16 object-cover rounded-lg border border-slate-200 flex-shrink-0">` : '<div class="w-16 h-16 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center text-slate-300 text-xs flex-shrink-0">No Img</div>'}
+        <div class="flex-1 min-w-0">
+          <div class="font-bold text-slate-800 text-base truncate">${esc(fav.name)}</div>
+          <div class="text-xs font-mono text-slate-500 truncate">JAN: ${esc(fav.jan)}</div>
         </div>
-        <button onclick="removeFavorite('${esc(fav.id)}')" class="text-slate-300 hover:text-red-500 p-1"><i class="fa-solid fa-trash"></i></button>
+        <div class="flex items-center gap-1">
+          <button onclick="openFavForm('${esc(fav.id)}')" class="text-blue-500 hover:text-blue-700 p-1.5"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="removeFavorite('${esc(fav.id)}')" class="text-slate-300 hover:text-red-500 p-1.5"><i class="fa-solid fa-trash"></i></button>
+        </div>
       </div>
       <button class="fav-show w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5">
         <i class="fa-solid fa-barcode text-base"></i> バーコード表示
