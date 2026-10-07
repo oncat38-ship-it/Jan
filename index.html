@@ -11,14 +11,12 @@
 <script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>')</script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
-<!-- Firebase (アカウント・オンラインデータ共有用) -->
+<!-- Firebase (簡易ID共有用) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   // ※ Firebaseを使う場合はご自身のFirebaseプロジェクト設定値に差し替えてください。
-  // 設定しない場合はローカルストレージ（オフライン）として動作します。
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
     authDomain: "YOUR_AUTH_DOMAIN",
@@ -28,11 +26,10 @@
     appId: "YOUR_APP_ID"
   };
 
-  let auth, dbFirestore;
+  let dbFirestore;
   try {
     if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
       const app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
       dbFirestore = getFirestore(app);
       window.firebaseEnabled = true;
     }
@@ -40,7 +37,7 @@
     console.warn("Firebase not initialized:", e);
   }
 
-  window.firebaseAuth = { auth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, dbFirestore, doc, setDoc, getDoc, onSnapshot };
+  window.firebaseAuth = { dbFirestore, doc, setDoc, getDoc, onSnapshot };
 </script>
 
 <style>
@@ -54,9 +51,9 @@
   <div class="max-w-4xl mx-auto px-4 py-2 flex justify-between items-center">
     <div class="flex items-center space-x-2"><i class="fa-solid fa-barcode text-2xl"></i><h1 class="font-bold text-xl tracking-wide">JAN Master Pro</h1></div>
     <div class="flex items-center gap-2">
-      <!-- アカウント状態表示ボタン -->
+      <!-- 簡易アカウント状態表示ボタン -->
       <button onclick="toggleAccountModal()" id="btn-account-status" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition">
-        <i class="fa-solid fa-user-circle"></i> <span id="account-status-text">ローカル保存中</span>
+        <i class="fa-solid fa-key"></i> <span id="account-status-text">オフライン保存</span>
       </button>
     </div>
   </div>
@@ -80,14 +77,14 @@
   <section id="section-scan" class="space-y-4">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200">
       <div class="flex justify-between items-center mb-3">
-        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読み取り</h2>
+        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読み取り (縦横対応)</h2>
         <span id="scan-status" class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold">待機中</span>
       </div>
-      <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[260px] flex items-center justify-center">
+      <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[280px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
         <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
           <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
-          <p class="text-sm">ボタンを押してカメラを起動してください</p>
+          <p class="text-sm">ボタンを押してカメラを起動してください<br><span class="text-xs text-slate-400">※スマホの縦向き・横向きのどちらでも読み取れます</span></p>
           <p id="https-warning" class="text-xs text-amber-300 hidden">※カメラ使用にはHTTPS接続（またはlocalhost）が必要です</p>
         </div>
       </div>
@@ -96,7 +93,7 @@
           <i class="fa-solid fa-power-off"></i> <span>カメラ起動</span>
         </button>
       </div>
-      <!-- ライト / ズーム (対応端末のみ表示) -->
+      <!-- ライト / ズーム -->
       <div id="cam-tools" class="mt-2 items-center gap-3" style="display:none">
         <button id="btn-torch" onclick="toggleTorch()" class="px-3 py-2 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold" style="display:none"><i class="fa-solid fa-lightbulb"></i> ライト</button>
         <label id="zoom-wrap" class="flex-1 items-center gap-2 text-xs text-slate-500" style="display:none">
@@ -167,10 +164,15 @@
             <input type="text" id="p-boxjan" placeholder="14901234567897" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
         </div>
         <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">価格 (円)</label>
-            <input type="number" id="p-price" placeholder="150" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
+            <input type="number" id="p-price" oninput="updateBoxPriceCalc()" placeholder="150" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
           <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数 (ケース個数)</label>
-            <input type="number" id="p-qty" placeholder="24" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+            <input type="number" id="p-qty" oninput="updateBoxPriceCalc()" placeholder="24" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        </div>
+        <!-- 箱価格の自動計算表示 -->
+        <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-2.5 text-xs text-indigo-900 flex justify-between items-center">
+          <span class="font-semibold"><i class="fa-solid fa-calculator text-indigo-600 mr-1"></i>箱（ケース）計算額:</span>
+          <span class="font-bold font-mono text-base text-indigo-700" id="calc-box-total">¥0</span>
         </div>
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
           <input type="text" id="p-memo" placeholder="特売用 / 棚番: A-12" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
@@ -183,8 +185,6 @@
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算 (末尾 ±1)</h2>
-      
-      <!-- 説明テキストの明確化 -->
       <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-900 space-y-1">
         <p class="font-bold"><i class="fa-solid fa-circle-info"></i> 単品・箱JAN相互予測ルール</p>
         <p>• <b>＋1 (末尾+1)</b>：単品JANから<b>「箱JANを知りたい時」</b>に使用します。</p>
@@ -289,34 +289,31 @@
   </div>
 </div>
 
-<!-- Account Modal (オンライン共有・アカウントシステム) -->
+<!-- Account Modal (簡易「合言葉」オンライン同期システム) -->
 <div id="account-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-cloud text-blue-600"></i> オンラインアカウント連携</h3>
+      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-key text-blue-600"></i> 簡易合言葉でデータ同期</h3>
       <button onclick="toggleAccountModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
     
     <div id="account-login-view" class="space-y-3">
-      <p class="text-xs text-slate-600">ログインすると、商品マスターやJAN無しリストがクラウド上に自動同期され、他のスマホやPCでも同じデータを共有できます。</p>
+      <p class="text-xs text-slate-600">メールアドレスは不要です。グループや店舗で決めた<b>「合言葉（グループID）」</b>を入力するだけで、複数端末のデータを自動で同期・共有できます。</p>
       
       <div class="space-y-2">
-        <input type="email" id="acc-email" placeholder="メールアドレス" class="w-full border rounded-lg px-3 py-2 text-sm">
-        <input type="password" id="acc-password" placeholder="パスワード" class="w-full border rounded-lg px-3 py-2 text-sm">
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="loginEmail()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs">ログイン</button>
-          <button onclick="registerEmail()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 rounded-lg text-xs">新規アカウント作成</button>
-        </div>
+        <label class="block text-xs font-semibold text-slate-700">任意の合言葉（例: shop123, tanaka-pos）</label>
+        <input type="text" id="acc-group-id" placeholder="合言葉を入力" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="connectSimpleGroup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs transition">この合言葉で同期スタート</button>
       </div>
     </div>
 
     <div id="account-logged-view" class="space-y-3 hidden">
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-xs text-emerald-800 space-y-1">
         <p class="font-bold"><i class="fa-solid fa-check-circle"></i> オンライン同期中</p>
-        <p>ログインユーザー: <span id="user-email-display" class="font-mono font-semibold"></span></p>
-        <p class="text-[11px] text-emerald-600">この端末で行ったマスター編集やリスト更新はリアルタイムで他の媒体にも自動連携されます。</p>
+        <p>現在の合言葉: <span id="group-id-display" class="font-mono font-semibold text-base text-emerald-900"></span></p>
+        <p class="text-[11px] text-emerald-600">同じ合言葉を入力した他のスマホやPCと、商品マスターやリストが自動でリアルタイム共有されます。</p>
       </div>
-      <button onclick="logoutAccount()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 rounded-lg text-xs border border-red-200">ログアウト</button>
+      <button onclick="disconnectGroup()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 rounded-lg text-xs border border-red-200">同期を解除（オフラインに戻る）</button>
     </div>
   </div>
 </div>
@@ -336,7 +333,8 @@ function loadJson(key) {
 }
 
 // --- DATA STORE ---
-let currentUser = null;
+let currentGroupId = localStorage.getItem('jan_group_id') || null;
+let unsubscribeSnapshot = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
 let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
 let lastScannedCode = "", pendingLinkCode = "", lastRead = "", sameCount = 0;
@@ -356,10 +354,10 @@ function saveDb() {
     localStorage.setItem('jan_history', JSON.stringify(db.history));
   } catch (_) {}
 
-  // Firebaseオンライン同期
-  if (currentUser && window.firebaseEnabled) {
+  // 簡易グループIDでのFirebaseクラウド共有
+  if (currentGroupId && window.firebaseEnabled) {
     const { dbFirestore, doc, setDoc } = window.firebaseAuth;
-    setDoc(doc(dbFirestore, "users", currentUser.uid), {
+    setDoc(doc(dbFirestore, "groups", currentGroupId), {
       products: db.products,
       favorites: db.favorites,
       updatedAt: new Date().toISOString()
@@ -367,37 +365,61 @@ function saveDb() {
   }
 }
 
-// --- ACCOUNT SYSTEM (FIREBASE) ---
+// --- SIMPLE GROUP ACCOUNT SYSTEM (簡易合言葉) ---
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
-    if (window.firebaseEnabled) {
-      const { auth, onAuthStateChanged, dbFirestore, doc, onSnapshot } = window.firebaseAuth;
-      onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        if (user) {
-          document.getElementById('account-status-text').textContent = user.email ? user.email.split('@')[0] : '同期中';
-          document.getElementById('btn-account-status').className = 'text-xs bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-full text-white font-medium flex items-center gap-1.5 transition';
-          document.getElementById('user-email-display').textContent = user.email || user.uid;
-          document.getElementById('account-login-view').classList.add('hidden');
-          document.getElementById('account-logged-view').classList.remove('hidden');
-
-          // クラウドの変更をリアルタイムリスニング
-          onSnapshot(doc(dbFirestore, "users", user.uid), (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
-              if (data.products) db.products = data.products;
-              if (data.favorites) db.favorites = data.favorites;
-              saveDbToLocalOnly();
-              renderSearchResults();
-            }
-          });
-        } else {
-          resetAccountUI();
-        }
-      });
+    if (currentGroupId && window.firebaseEnabled) {
+      startGroupSync(currentGroupId);
     }
   }, 500);
 });
+
+function connectSimpleGroup() {
+  const groupId = document.getElementById('acc-group-id').value.trim();
+  if (!groupId) return alert('合言葉を入力してください');
+  if (!window.firebaseEnabled) return alert("Firebaseの設定がされていません。コード内のfirebaseConfigを設定してください。");
+  
+  localStorage.setItem('jan_group_id', groupId);
+  currentGroupId = groupId;
+  startGroupSync(groupId);
+  toggleAccountModal();
+}
+
+function startGroupSync(groupId) {
+  const { dbFirestore, doc, onSnapshot } = window.firebaseAuth;
+  
+  document.getElementById('account-status-text').textContent = '同期: ' + groupId;
+  document.getElementById('btn-account-status').className = 'text-xs bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-full text-white font-medium flex items-center gap-1.5 transition';
+  document.getElementById('group-id-display').textContent = groupId;
+  document.getElementById('account-login-view').classList.add('hidden');
+  document.getElementById('account-logged-view').classList.remove('hidden');
+
+  if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+  unsubscribeSnapshot = onSnapshot(doc(dbFirestore, "groups", groupId), (snapshot) => {
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (data.products) db.products = data.products;
+      if (data.favorites) db.favorites = data.favorites;
+      saveDbToLocalOnly();
+      renderSearchResults();
+    } else {
+      // ドキュメントがまだ無ければ作成
+      saveDb();
+    }
+  });
+}
+
+function disconnectGroup() {
+  if (unsubscribeSnapshot) unsubscribeSnapshot();
+  localStorage.removeItem('jan_group_id');
+  currentGroupId = null;
+  document.getElementById('account-status-text').textContent = 'オフライン保存';
+  document.getElementById('btn-account-status').className = 'text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition';
+  document.getElementById('account-login-view').classList.remove('hidden');
+  document.getElementById('account-logged-view').classList.add('hidden');
+  toggleAccountModal();
+}
 
 function saveDbToLocalOnly() {
   try {
@@ -406,42 +428,8 @@ function saveDbToLocalOnly() {
   } catch (_) {}
 }
 
-function resetAccountUI() {
-  currentUser = null;
-  document.getElementById('account-status-text').textContent = 'ローカル保存中';
-  document.getElementById('btn-account-status').className = 'text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition';
-  document.getElementById('account-login-view').classList.remove('hidden');
-  document.getElementById('account-logged-view').classList.add('hidden');
-}
-
 function toggleAccountModal() {
   document.getElementById('account-modal').classList.toggle('hidden');
-}
-
-async function loginEmail() {
-  if (!window.firebaseEnabled) return alert("Firebaseの設定が設定されていません。コード内のfirebaseConfigを入力してください。");
-  const email = document.getElementById('acc-email').value.trim();
-  const pass = document.getElementById('acc-password').value.trim();
-  try {
-    await window.firebaseAuth.signInWithEmailAndPassword(window.firebaseAuth.auth, email, pass);
-    toggleAccountModal();
-  } catch (e) { alert("ログイン失敗: " + e.message); }
-}
-
-async function registerEmail() {
-  if (!window.firebaseEnabled) return alert("Firebaseの設定が設定されていません。コード内のfirebaseConfigを入力してください。");
-  const email = document.getElementById('acc-email').value.trim();
-  const pass = document.getElementById('acc-password').value.trim();
-  try {
-    await window.firebaseAuth.createUserWithEmailAndPassword(window.firebaseAuth.auth, email, pass);
-    alert("アカウントを作成しました。クラウド同期を開始します。");
-    toggleAccountModal();
-  } catch (e) { alert("作成失敗: " + e.message); }
-}
-
-async function logoutAccount() {
-  if (window.firebaseEnabled) await window.firebaseAuth.signOut(window.firebaseAuth.auth);
-  toggleAccountModal();
 }
 
 // --- TABS ---
@@ -473,7 +461,7 @@ function isValidJan(code) {
 }
 
 // =====================================================
-// CAMERA (精度向上チューニング)
+// CAMERA (縦横対応・高解像度最適化)
 // =====================================================
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
@@ -481,17 +469,16 @@ function createScanner() {
   const F = Html5QrcodeSupportedFormats;
   return new Html5Qrcode("reader", {
     formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.ITF],          
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },  // ネイティブバーコード検出で高速・高精度化
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },  
     verbose: false
   });
 }
 
-// 誤読対策: 同じ値を2回連続で認識できた場合のみ結果を採用
 function onDecoded(text) {
   if (!isScanning) return;
   let code = String(text).trim();
   if (!/^\d+$/.test(code) || !isValidJan(code)) return;
-  if (code.length === 12) code = '0' + code; // UPC-A → 13桁化
+  if (code.length === 12) code = '0' + code;
   if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
   if (sameCount < 2) return;
   lastRead = ""; sameCount = 0;
@@ -501,11 +488,11 @@ function onDecoded(text) {
 function cameraErrorMessage(err) {
   const name = (err && err.name) || String(err);
   const map = {
-    NotAllowedError: 'カメラの使用が許可されていません。ブラウザのサイト設定でカメラを「許可」にしてください。',
+    NotAllowedError: 'カメラの使用が許可されていません。ブラウザの設定でカメラを「許可」にしてください。',
     NotFoundError: 'カメラが見つかりません。',
     NotReadableError: '他のアプリがカメラを使用中の可能性があります。',
-    OverconstrainedError: 'このカメラは指定条件に対応していません。',
-    SecurityError: 'セキュリティ制限でカメラを使えません。HTTPS接続の環境で開いてください。'
+    OverconstrainedError: 'カメラの設定に対応していません。',
+    SecurityError: 'HTTPS接続の環境で開いてください。'
   };
   return (map[name] || 'カメラを起動できませんでした。') + '\n\n[エラー: ' + name + ']';
 }
@@ -513,11 +500,11 @@ function cameraErrorMessage(err) {
 async function startCamera() {
   if (starting) return;
   if (typeof Html5Qrcode === "undefined") {
-    alert("バーコードスキャンライブラリの読み込みに失敗しました。ネット接続を確認してください。");
+    alert("ライブラリの読み込みに失敗しました。ネット接続を確認してください。");
     return;
   }
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("このページではカメラを使えません。HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。");
+    alert("HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。");
     return;
   }
   starting = true;
@@ -525,17 +512,17 @@ async function startCamera() {
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
-  // フレーム領域をやや横長・大きめに確保してピント合わせ精度を向上
+  // 正方形のスキャンエリア(250x250)に設定し、スマホが縦・横どちらでも読めるよう調整
   const base = {
     fps: 20,
     disableFlip: true,
     qrbox: (w, h) => {
-      const m = Math.min(w, h);
-      return { width: Math.floor(Math.min(w, m * 1.8) * 0.92), height: Math.floor(m * 0.5) };
+      const minDim = Math.min(w, h);
+      const boxSize = Math.floor(minDim * 0.75);
+      return { width: boxSize, height: boxSize };
     }
   };
   
-  // 高画質(1080p)ストリーム設定
   const hiRes = { 
     ...base, 
     videoConstraints: { 
@@ -708,8 +695,15 @@ function addScanToFavorite() {
 }
 
 // =====================================================
-// SEARCH & MASTER
+// SEARCH & MASTER (単品×点数=箱価格 計算機能付き)
 // =====================================================
+function updateBoxPriceCalc() {
+  const p = parseFloat(document.getElementById('p-price').value) || 0;
+  const q = parseFloat(document.getElementById('p-qty').value) || 0;
+  const total = p * q;
+  document.getElementById('calc-box-total').textContent = '¥' + total.toLocaleString();
+}
+
 function renderSearchResults(items = db.products) {
   const list = document.getElementById('search-result-list');
   list.innerHTML = '';
@@ -718,6 +712,10 @@ function renderSearchResults(items = db.products) {
     return;
   }
   items.forEach(item => {
+    const p = parseFloat(item.price) || 0;
+    const q = parseFloat(item.qty) || 0;
+    const boxTotal = (p * q > 0) ? (p * q).toLocaleString() : null;
+
     const div = document.createElement('div');
     div.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center";
     div.innerHTML = `
@@ -731,11 +729,12 @@ function renderSearchResults(items = db.products) {
           <span>単品JAN: <b>${esc(item.jan)}</b></span>
           ${item.boxJan ? `<span class="text-indigo-600">箱JAN: <b>${esc(item.boxJan)}</b></span>` : ''}
         </div>
-        <div class="text-xs text-slate-600 space-x-3">
-          <span>価格: ¥${esc(item.price || '-')}</span>
+        <div class="text-xs text-slate-600 space-x-2">
+          <span>単品: ¥${esc(item.price || '-')}</span>
           <span>入数: ${esc(item.qty || '-')}</span>
-          <span class="text-slate-400">${esc(item.memo || '')}</span>
+          ${boxTotal ? `<span class="text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">箱額: ¥${boxTotal}</span>` : ''}
         </div>
+        ${item.memo ? `<div class="text-[11px] text-slate-400">${esc(item.memo)}</div>` : ''}
       </div>
       <div class="flex flex-col gap-2">
         <button onclick="showBarcodeModal('${esc(item.jan)}', '${esc(item.name)} (単品)')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 単品</button>
@@ -764,6 +763,7 @@ function editProduct(id) {
   document.getElementById('p-price').value = item.price || '';
   document.getElementById('p-qty').value = item.qty || '';
   document.getElementById('p-memo').value = item.memo || '';
+  updateBoxPriceCalc();
   document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の編集';
   document.getElementById('submit-btn').textContent = '商品データを更新';
   document.getElementById('cancel-edit-btn').classList.remove('hidden');
@@ -773,6 +773,7 @@ function editProduct(id) {
 function resetForm() {
   document.getElementById('p-id').value = '';
   document.getElementById('product-form').reset();
+  updateBoxPriceCalc();
   document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録';
   document.getElementById('submit-btn').textContent = '商品データを保存';
   document.getElementById('cancel-edit-btn').classList.add('hidden');
@@ -834,7 +835,7 @@ function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText 
   container.appendChild(div);
 }
 
-// --- PREDICT (±1のみ・説明表記追加) ---
+// --- PREDICT (±1) ---
 function predictBoxJan() {
   const input = document.getElementById('predict-input').value.trim();
   const container = document.getElementById('predict-results');
@@ -847,7 +848,6 @@ function predictBoxJan() {
   const body = input.slice(0, -1);
   const lastNum = parseInt(body.slice(-1), 10);
 
-  // ±1 のみ計算
   const offsets = [
     { offset: 1, label: '＋1 (箱JAN予測)', badge: '箱を知りたい時', desc: '単品JAN → 箱JAN' },
     { offset: -1, label: '−1 (単品JAN予測)', badge: '単品を知りたい時', desc: '箱JAN → 単品JAN' }
