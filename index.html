@@ -38,7 +38,7 @@
 
 <style>
 .active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
-#reader video{border-radius:.75rem; object-fit: cover;}
+#reader video{border-radius:.75rem; object-fit: cover; filter: contrast(1.2) brightness(1.05);}
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col pb-16 md:pb-0">
@@ -98,7 +98,7 @@
       </div>
     </div>
 
-    <!-- スキャン結果カード (3つの選択肢に絞り込み) -->
+    <!-- スキャン結果カード -->
     <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
       <div class="flex justify-between items-start border-b pb-3">
         <div>
@@ -127,7 +127,7 @@
     </div>
   </section>
 
-  <!-- 2. JAN-NASHI (写真・名前編集機能追加／JANコード表記変更) -->
+  <!-- 2. JAN-NASHI -->
   <section id="section-fav" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <div class="flex justify-between items-center">
@@ -171,7 +171,7 @@
     <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
   </section>
 
-  <!-- 3. PREDICT & MANAGEMENT (単品⇔箱JAN予測 ＋ 検索・修正機能) -->
+  <!-- 3. PREDICT & MANAGEMENT -->
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
@@ -182,7 +182,6 @@
     </div>
     <div id="predict-results" class="space-y-2"></div>
 
-    <!-- 商品管理・検索・修正枠 -->
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2 border-b pb-2"><i class="fa-solid fa-sliders text-blue-600"></i> 登録商品の検索・修正</h3>
       <div class="flex gap-2">
@@ -191,7 +190,6 @@
       <div id="manage-result-list" class="space-y-2 pt-1"></div>
     </div>
 
-    <!-- 編集フォーム -->
     <div id="manage-form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3 hidden">
       <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
         <span><i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の修正</span>
@@ -494,7 +492,7 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-/* カメラ精度・解像度・光調整の最適化スキャナー */
+/* カメラ精度・解像度・フォーカス範囲調整のスキャナー */
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner() {
@@ -528,25 +526,24 @@ async function startCamera() {
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
+  // バーコード認識に最適な読み取り領域 (横幅88%, 縦幅45%)
   const baseConfig = {
-    fps: 30, // 密度向上と高速認識のためフレームレート向上
-    qrbox: (w, h) => ({ width: Math.floor(w * 0.85), height: Math.floor(h * 0.5) }),
+    fps: 30,
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.88), height: Math.floor(h * 0.45) }),
     aspectRatio: 1.0
   };
   
-  // 高解像度・フォーカス・露出補正を含む高度カメラパラメーター
-  const hiResConstraints = { 
-    facingMode: "environment", 
-    width: { ideal: 1920, min: 1280 }, 
-    height: { ideal: 1080, min: 720 },
-    focusMode: { ideal: "continuous" },
-    exposureMode: { ideal: "continuous" }
-  };
-
+  // 端末依存によるカメラ起動エラーを防ぐ段階的フォールバック設定
   const attempts = [
-    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: hiResConstraints }],
-    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: hiResConstraints }],
+    // 1. フルHD高画質 ＋ フォーカス連動
+    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } } }],
+    // 2. HD画質
+    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 }, focusMode: { ideal: "continuous" } } }],
+    // 3. 標準画質
+    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } } }],
+    // 4. 制約最小限
     () => [{ facingMode: "environment" }, baseConfig],
+    // 5. デフォルトカメラ
     () => [true, baseConfig]
   ];
 
@@ -718,7 +715,6 @@ function predictBoxJan() {
   addHistory('箱JAN予測(±1)', input);
 }
 
-/* 単品⇔箱JAN予測ページ内の検索・修正管理枠 */
 function searchManageItem() {
   const q = (document.getElementById('manage-search-input')?.value || '').trim().toLowerCase();
   const list = document.getElementById('manage-result-list');
@@ -858,7 +854,7 @@ function solveMissingJan() {
   addHistory('欠損補完', raw);
 }
 
-/* JAN無し機能（名前・写真の新規および編集対応） */
+/* JAN無し機能（名前選択欄の初期値を空白に固定） */
 function openFavForm(id = null, presetJan = '') {
   const form = document.getElementById('fav-form-container');
   form.classList.remove('hidden');
@@ -879,10 +875,10 @@ function openFavForm(id = null, presetJan = '') {
       clearFavImage();
     }
   } else {
-    // 新規追加モード
+    // 新規追加モード（カメラ引き継ぎ時でも名前欄は空白を初期値にする）
     document.getElementById('fav-form-title').innerHTML = '<i class="fa-solid fa-plus"></i> JAN無し商品の登録';
     document.getElementById('fav-input-id').value = '';
-    document.getElementById('fav-input-name').value = presetJan ? `商品 (${presetJan})` : '';
+    document.getElementById('fav-input-name').value = ''; 
     document.getElementById('fav-input-jan').value = presetJan;
     clearFavImage();
   }
@@ -937,13 +933,11 @@ function saveCustomFavorite() {
   }
 
   if (id) {
-    // 既存データの更新
     const idx = db.favorites.findIndex(f => f.id === id);
     if (idx !== -1) {
       db.favorites[idx] = { id, name, jan, image: currentBase64Image };
     }
   } else {
-    // 新規データの追加
     db.favorites.unshift({
       id: Date.now().toString(),
       name,
