@@ -10,21 +10,59 @@
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>')</script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<!-- Firebase (アカウント・オンラインデータ共有用) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  // ※ Firebaseを使う場合はご自身のFirebaseプロジェクト設定値に差し替えてください。
+  // 設定しない場合はローカルストレージ（オフライン）として動作します。
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
+
+  let auth, dbFirestore;
+  try {
+    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      dbFirestore = getFirestore(app);
+      window.firebaseEnabled = true;
+    }
+  } catch (e) {
+    console.warn("Firebase not initialized:", e);
+  }
+
+  window.firebaseAuth = { auth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, dbFirestore, doc, setDoc, getDoc, onSnapshot };
+</script>
+
 <style>
 .active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
-#reader video{border-radius:.75rem}
+#reader video{border-radius:.75rem; object-fit: cover;}
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col pb-16 md:pb-0">
 
 <header class="bg-blue-600 text-white shadow-md sticky top-0 z-50">
-  <div class="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
+  <div class="max-w-4xl mx-auto px-4 py-2 flex justify-between items-center">
     <div class="flex items-center space-x-2"><i class="fa-solid fa-barcode text-2xl"></i><h1 class="font-bold text-xl tracking-wide">JAN Master Pro</h1></div>
-    <span class="text-xs bg-blue-700 px-2.5 py-1 rounded-full text-blue-100 font-medium">Webブラウザ対応</span>
+    <div class="flex items-center gap-2">
+      <!-- アカウント状態表示ボタン -->
+      <button onclick="toggleAccountModal()" id="btn-account-status" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition">
+        <i class="fa-solid fa-user-circle"></i> <span id="account-status-text">ローカル保存中</span>
+      </button>
+    </div>
   </div>
 </header>
 
-<nav class="bg-white border-b border-slate-200 sticky top-[52px] z-40 shadow-sm overflow-x-auto">
+<nav class="bg-white border-b border-slate-200 sticky top-[48px] z-40 shadow-sm overflow-x-auto">
   <div class="max-w-4xl mx-auto flex whitespace-nowrap text-sm text-slate-600 font-medium">
     <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center active-tab hover:bg-slate-50 transition"><i class="fa-solid fa-camera mr-1"></i>カメラ・結果</button>
     <button onclick="switchTab('search')" id="tab-search" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-magnifying-glass mr-1"></i>検索・登録</button>
@@ -45,7 +83,7 @@
         <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読み取り</h2>
         <span id="scan-status" class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold">待機中</span>
       </div>
-      <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[240px] flex items-center justify-center">
+      <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[260px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
         <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
           <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
@@ -144,11 +182,18 @@
   <!-- 3. PREDICT -->
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算</h2>
-      <p class="text-xs text-slate-500">商品コード末尾の数字変化（±1等）から正確なチェックデジットを自動計算して候補を表示します。</p>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算 (末尾 ±1)</h2>
+      
+      <!-- 説明テキストの明確化 -->
+      <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-900 space-y-1">
+        <p class="font-bold"><i class="fa-solid fa-circle-info"></i> 単品・箱JAN相互予測ルール</p>
+        <p>• <b>＋1 (末尾+1)</b>：単品JANから<b>「箱JANを知りたい時」</b>に使用します。</p>
+        <p>• <b>−1 (末尾-1)</b>：箱JANから<b>「単品JANを知りたい時」</b>に使用します。</p>
+      </div>
+
       <div class="space-y-2">
         <input type="text" id="predict-input" placeholder="元になるJANコード (例: 4901234567890)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
-        <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">予測候補を計算</button>
+        <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">予測候補を計算 (±1)</button>
       </div>
     </div>
     <div id="predict-results" class="space-y-2"></div>
@@ -244,6 +289,38 @@
   </div>
 </div>
 
+<!-- Account Modal (オンライン共有・アカウントシステム) -->
+<div id="account-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-cloud text-blue-600"></i> オンラインアカウント連携</h3>
+      <button onclick="toggleAccountModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    
+    <div id="account-login-view" class="space-y-3">
+      <p class="text-xs text-slate-600">ログインすると、商品マスターやJAN無しリストがクラウド上に自動同期され、他のスマホやPCでも同じデータを共有できます。</p>
+      
+      <div class="space-y-2">
+        <input type="email" id="acc-email" placeholder="メールアドレス" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <input type="password" id="acc-password" placeholder="パスワード" class="w-full border rounded-lg px-3 py-2 text-sm">
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="loginEmail()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-xs">ログイン</button>
+          <button onclick="registerEmail()" class="bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 rounded-lg text-xs">新規アカウント作成</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="account-logged-view" class="space-y-3 hidden">
+      <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-xs text-emerald-800 space-y-1">
+        <p class="font-bold"><i class="fa-solid fa-check-circle"></i> オンライン同期中</p>
+        <p>ログインユーザー: <span id="user-email-display" class="font-mono font-semibold"></span></p>
+        <p class="text-[11px] text-emerald-600">この端末で行ったマスター編集やリスト更新はリアルタイムで他の媒体にも自動連携されます。</p>
+      </div>
+      <button onclick="logoutAccount()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 rounded-lg text-xs border border-red-200">ログアウト</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // --- HTTPS CHECK ---
 if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
@@ -259,6 +336,7 @@ function loadJson(key) {
 }
 
 // --- DATA STORE ---
+let currentUser = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
 let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
 let lastScannedCode = "", pendingLinkCode = "", lastRead = "", sameCount = 0;
@@ -270,12 +348,100 @@ if (db.products.length === 0) {
   ];
   saveDb();
 }
+
 function saveDb() {
   try {
     localStorage.setItem('jan_products', JSON.stringify(db.products));
     localStorage.setItem('jan_favorites', JSON.stringify(db.favorites));
     localStorage.setItem('jan_history', JSON.stringify(db.history));
   } catch (_) {}
+
+  // Firebaseオンライン同期
+  if (currentUser && window.firebaseEnabled) {
+    const { dbFirestore, doc, setDoc } = window.firebaseAuth;
+    setDoc(doc(dbFirestore, "users", currentUser.uid), {
+      products: db.products,
+      favorites: db.favorites,
+      updatedAt: new Date().toISOString()
+    }, { merge: true }).catch(err => console.error("Cloud save failed:", err));
+  }
+}
+
+// --- ACCOUNT SYSTEM (FIREBASE) ---
+window.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    if (window.firebaseEnabled) {
+      const { auth, onAuthStateChanged, dbFirestore, doc, onSnapshot } = window.firebaseAuth;
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+          document.getElementById('account-status-text').textContent = user.email ? user.email.split('@')[0] : '同期中';
+          document.getElementById('btn-account-status').className = 'text-xs bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded-full text-white font-medium flex items-center gap-1.5 transition';
+          document.getElementById('user-email-display').textContent = user.email || user.uid;
+          document.getElementById('account-login-view').classList.add('hidden');
+          document.getElementById('account-logged-view').classList.remove('hidden');
+
+          // クラウドの変更をリアルタイムリスニング
+          onSnapshot(doc(dbFirestore, "users", user.uid), (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              if (data.products) db.products = data.products;
+              if (data.favorites) db.favorites = data.favorites;
+              saveDbToLocalOnly();
+              renderSearchResults();
+            }
+          });
+        } else {
+          resetAccountUI();
+        }
+      });
+    }
+  }, 500);
+});
+
+function saveDbToLocalOnly() {
+  try {
+    localStorage.setItem('jan_products', JSON.stringify(db.products));
+    localStorage.setItem('jan_favorites', JSON.stringify(db.favorites));
+  } catch (_) {}
+}
+
+function resetAccountUI() {
+  currentUser = null;
+  document.getElementById('account-status-text').textContent = 'ローカル保存中';
+  document.getElementById('btn-account-status').className = 'text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition';
+  document.getElementById('account-login-view').classList.remove('hidden');
+  document.getElementById('account-logged-view').classList.add('hidden');
+}
+
+function toggleAccountModal() {
+  document.getElementById('account-modal').classList.toggle('hidden');
+}
+
+async function loginEmail() {
+  if (!window.firebaseEnabled) return alert("Firebaseの設定が設定されていません。コード内のfirebaseConfigを入力してください。");
+  const email = document.getElementById('acc-email').value.trim();
+  const pass = document.getElementById('acc-password').value.trim();
+  try {
+    await window.firebaseAuth.signInWithEmailAndPassword(window.firebaseAuth.auth, email, pass);
+    toggleAccountModal();
+  } catch (e) { alert("ログイン失敗: " + e.message); }
+}
+
+async function registerEmail() {
+  if (!window.firebaseEnabled) return alert("Firebaseの設定が設定されていません。コード内のfirebaseConfigを入力してください。");
+  const email = document.getElementById('acc-email').value.trim();
+  const pass = document.getElementById('acc-password').value.trim();
+  try {
+    await window.firebaseAuth.createUserWithEmailAndPassword(window.firebaseAuth.auth, email, pass);
+    alert("アカウントを作成しました。クラウド同期を開始します。");
+    toggleAccountModal();
+  } catch (e) { alert("作成失敗: " + e.message); }
+}
+
+async function logoutAccount() {
+  if (window.firebaseEnabled) await window.firebaseAuth.signOut(window.firebaseAuth.auth);
+  toggleAccountModal();
 }
 
 // --- TABS ---
@@ -307,25 +473,25 @@ function isValidJan(code) {
 }
 
 // =====================================================
-// CAMERA
+// CAMERA (精度向上チューニング)
 // =====================================================
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner() {
   const F = Html5QrcodeSupportedFormats;
   return new Html5Qrcode("reader", {
-    formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.ITF],          // 不要形式を外して誤読を減らす
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true },  // 端末ネイティブ検出(高精度・高速)
+    formatsToSupport: [F.EAN_13, F.EAN_8, F.UPC_A, F.ITF],          
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true },  // ネイティブバーコード検出で高速・高精度化
     verbose: false
   });
 }
 
-// 誤読対策: 桁数+チェックデジット検証、同じ値を2回連続で読めたら確定
+// 誤読対策: 同じ値を2回連続で認識できた場合のみ結果を採用
 function onDecoded(text) {
   if (!isScanning) return;
   let code = String(text).trim();
   if (!/^\d+$/.test(code) || !isValidJan(code)) return;
-  if (code.length === 12) code = '0' + code; // UPC-A → 13桁
+  if (code.length === 12) code = '0' + code; // UPC-A → 13桁化
   if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
   if (sameCount < 2) return;
   lastRead = ""; sameCount = 0;
@@ -337,9 +503,9 @@ function cameraErrorMessage(err) {
   const map = {
     NotAllowedError: 'カメラの使用が許可されていません。ブラウザのサイト設定でカメラを「許可」にしてください。',
     NotFoundError: 'カメラが見つかりません。',
-    NotReadableError: '他のアプリがカメラを使用中の可能性があります。他のアプリを閉じてください。',
+    NotReadableError: '他のアプリがカメラを使用中の可能性があります。',
     OverconstrainedError: 'このカメラは指定条件に対応していません。',
-    SecurityError: 'セキュリティ制限でカメラを使えません。HTTPSで通常のブラウザから開いてください。'
+    SecurityError: 'セキュリティ制限でカメラを使えません。HTTPS接続の環境で開いてください。'
   };
   return (map[name] || 'カメラを起動できませんでした。') + '\n\n[エラー: ' + name + ']';
 }
@@ -351,7 +517,7 @@ async function startCamera() {
     return;
   }
   if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("このページではカメラを使えません。HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。\nLINE等のアプリ内ブラウザでは動作しません。");
+    alert("このページではカメラを使えません。HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。");
     return;
   }
   starting = true;
@@ -359,22 +525,33 @@ async function startCamera() {
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
+  // フレーム領域をやや横長・大きめに確保してピント合わせ精度を向上
   const base = {
-    fps: 15,
+    fps: 20,
     disableFlip: true,
     qrbox: (w, h) => {
       const m = Math.min(w, h);
-      return { width: Math.floor(Math.min(w, m * 1.6) * 0.9), height: Math.floor(m * 0.55) };
+      return { width: Math.floor(Math.min(w, m * 1.8) * 0.92), height: Math.floor(m * 0.5) };
     }
   };
-  const hiRes = { ...base, videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } };
+  
+  // 高画質(1080p)ストリーム設定
+  const hiRes = { 
+    ...base, 
+    videoConstraints: { 
+      facingMode: "environment", 
+      width: { ideal: 1920, min: 1280 }, 
+      height: { ideal: 1080, min: 720 },
+      advanced: [{ focusMode: "continuous" }]
+    } 
+  };
 
-  // 高解像度 → 背面カメラのみ → 前面/PCカメラ → カメラ一覧から選択、の順に試す
   const attempts = [
     () => [{ facingMode: "environment" }, hiRes],
     () => [{ facingMode: "environment" }, base],
     () => [{ facingMode: "user" }, base]
   ];
+
   let started = false, lastErr = null;
   for (const make of attempts) {
     try {
@@ -389,6 +566,7 @@ async function startCamera() {
       try { html5QrcodeScanner.clear(); } catch (_) {}
     }
   }
+
   if (!started) {
     try {
       const cams = await Html5Qrcode.getCameras();
@@ -416,10 +594,8 @@ async function startCamera() {
 }
 
 async function setupCameraTools() {
-  // 連続オートフォーカス(未対応端末では無視される)
   try {
     await html5QrcodeScanner.applyVideoConstraints({
-      width: { ideal: 1920 }, height: { ideal: 1080 },
       advanced: [{ focusMode: "continuous" }]
     });
   } catch (_) {}
@@ -437,6 +613,7 @@ async function setupCameraTools() {
     document.getElementById('cam-tools').style.display = (torch.isSupported() || zoom.isSupported()) ? 'flex' : 'none';
   } catch (_) {}
 }
+
 function toggleTorch() {
   try { torchOn = !torchOn; html5QrcodeScanner.getRunningTrackCameraCapabilities().torchFeature().apply(torchOn); } catch (_) {}
 }
@@ -561,13 +738,9 @@ function renderSearchResults(items = db.products) {
         </div>
       </div>
       <div class="flex flex-col gap-2">
-        <button onclick="showBarcodeModal('${esc(item.jan)}', '単品')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 単品</button>
-        ${item.boxJan ? `<button onclick="showBarcodeModal('${esc(item.boxJan)}', '箱')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 箱</button>` : ''}
+        <button onclick="showBarcodeModal('${esc(item.jan)}', '${esc(item.name)} (単品)')" class="bg-blue-50 text-blue-600 hover:bg-blue-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 単品</button>
+        ${item.boxJan ? `<button onclick="showBarcodeModal('${esc(item.boxJan)}', '${esc(item.name)} (箱)')" class="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 p-2 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-barcode"></i> 箱</button>` : ''}
       </div>`;
-    // 商品名付きのモーダルタイトル
-    const btns = div.querySelectorAll('button[onclick^="showBarcodeModal"]');
-    btns[0].onclick = () => showBarcodeModal(item.jan, item.name + ' (単品)');
-    if (btns[1]) btns[1].onclick = () => showBarcodeModal(item.boxJan, item.name + ' (箱)');
     list.appendChild(div);
   });
 }
@@ -640,25 +813,28 @@ function saveProduct(e) {
 // =====================================================
 // 候補カード共通 (予測 / 欠損補完)
 // =====================================================
-function appendCodeCard(container, code, label, viewColor, viewTitle) {
+function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText = '') {
   const div = document.createElement('div');
-  div.className = "bg-white p-3 rounded-lg border border-slate-200 flex flex-col gap-2";
+  div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2 shadow-sm";
   div.innerHTML = `
     <div class="flex justify-between items-center">
       <div>
-        ${label ? `<span class="text-xs font-semibold text-slate-500">${esc(label)}</span>` : ''}
-        <div class="font-mono font-bold text-slate-800 text-lg">${esc(code)}</div>
+        <div class="flex items-center gap-1.5 mb-0.5">
+          ${label ? `<span class="text-xs font-bold text-slate-700">${esc(label)}</span>` : ''}
+          ${badgeText ? `<span class="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">${esc(badgeText)}</span>` : ''}
+        </div>
+        <div class="font-mono font-black text-slate-900 text-xl tracking-wide">${esc(code)}</div>
       </div>
-      <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>
+      <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 border border-${viewColor}-200 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>
     </div>
     <div class="flex gap-2 border-t pt-2">
-      <button onclick="registerCodeDirect('${code}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-1 rounded text-xs font-bold border border-emerald-200"><i class="fa-solid fa-plus-circle"></i> 新規登録</button>
-      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存商品に紐付け</button>
+      <button onclick="registerCodeDirect('${code}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-1 rounded-lg text-xs font-bold border border-emerald-200"><i class="fa-solid fa-plus-circle"></i> 新規登録</button>
+      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded-lg text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存商品に紐付け</button>
     </div>`;
   container.appendChild(div);
 }
 
-// --- PREDICT ---
+// --- PREDICT (±1のみ・説明表記追加) ---
 function predictBoxJan() {
   const input = document.getElementById('predict-input').value.trim();
   const container = document.getElementById('predict-results');
@@ -667,16 +843,25 @@ function predictBoxJan() {
     alert('12〜14桁の数字のJAN/ITFコードを入力してください');
     return;
   }
+  
   const body = input.slice(0, -1);
-  for (let offset = -2; offset <= 2; offset++) {
-    if (offset === 0) continue;
-    const lastNum = parseInt(body.slice(-1), 10);
-    const newLast = (lastNum + offset + 10) % 10;
+  const lastNum = parseInt(body.slice(-1), 10);
+
+  // ±1 のみ計算
+  const offsets = [
+    { offset: 1, label: '＋1 (箱JAN予測)', badge: '箱を知りたい時', desc: '単品JAN → 箱JAN' },
+    { offset: -1, label: '−1 (単品JAN予測)', badge: '単品を知りたい時', desc: '箱JAN → 単品JAN' }
+  ];
+
+  offsets.forEach(item => {
+    const newLast = (lastNum + item.offset + 10) % 10;
     const newBody = body.slice(0, -1) + newLast;
     const cd = calcCheckDigit(newBody);
-    appendCodeCard(container, newBody + cd, `コード末尾 ${offset > 0 ? '+' + offset : offset}`, 'indigo', `コード末尾 ${offset > 0 ? '+' + offset : offset}`);
-  }
-  addHistory('箱JAN予測', input);
+    const predictedCode = newBody + cd;
+    appendCodeCard(container, predictedCode, item.label, 'indigo', item.desc, item.badge);
+  });
+
+  addHistory('箱JAN予測(±1)', input);
 }
 
 // --- ITF ---
