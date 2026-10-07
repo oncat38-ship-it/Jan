@@ -3,20 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>JAN Master Pro - レジ業務サポート</title>
+<title>JAN Master Pro</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<!-- html5-qrcode: jsDelivr優先、失敗時はunpkgへ自動フォールバック -->
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>')</script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
-<!-- Firebase (簡易ID共有用) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // ※ Firebaseを使う場合はご自身のFirebaseプロジェクト設定値に差し替えてください。
   const firebaseConfig = {
     apiKey: "YOUR_API_KEY",
     authDomain: "YOUR_AUTH_DOMAIN",
@@ -51,7 +48,6 @@
   <div class="max-w-4xl mx-auto px-4 py-2 flex justify-between items-center">
     <div class="flex items-center space-x-2"><i class="fa-solid fa-barcode text-2xl"></i><h1 class="font-bold text-xl tracking-wide">JAN Master Pro</h1></div>
     <div class="flex items-center gap-2">
-      <!-- 簡易アカウント状態表示ボタン -->
       <button onclick="toggleAccountModal()" id="btn-account-status" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition">
         <i class="fa-solid fa-key"></i> <span id="account-status-text">オフライン保存</span>
       </button>
@@ -77,15 +73,13 @@
   <section id="section-scan" class="space-y-4">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200">
       <div class="flex justify-between items-center mb-3">
-        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読み取り (縦横対応)</h2>
+        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> スキャナー</h2>
         <span id="scan-status" class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold">待機中</span>
       </div>
       <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[280px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
         <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
           <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
-          <p class="text-sm">ボタンを押してカメラを起動してください<br><span class="text-xs text-slate-400">※スマホの縦向き・横向きのどちらでも読み取れます</span></p>
-          <p id="https-warning" class="text-xs text-amber-300 hidden">※カメラ使用にはHTTPS接続（またはlocalhost）が必要です</p>
         </div>
       </div>
       <div class="mt-3 flex gap-2">
@@ -93,7 +87,6 @@
           <i class="fa-solid fa-power-off"></i> <span>カメラ起動</span>
         </button>
       </div>
-      <!-- ライト / ズーム -->
       <div id="cam-tools" class="mt-2 items-center gap-3" style="display:none">
         <button id="btn-torch" onclick="toggleTorch()" class="px-3 py-2 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold" style="display:none"><i class="fa-solid fa-lightbulb"></i> ライト</button>
         <label id="zoom-wrap" class="flex-1 items-center gap-2 text-xs text-slate-500" style="display:none">
@@ -106,29 +99,28 @@
     <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
       <div class="flex justify-between items-start border-b pb-3">
         <div>
-          <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">最新のスキャン結果</span>
+          <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">スキャン結果</span>
           <div class="text-2xl font-black text-slate-900 font-mono tracking-widest mt-0.5" id="scan-code-val">----</div>
         </div>
         <button onclick="closeScanResult()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
       <div class="bg-slate-50 p-3 rounded-lg flex flex-col items-center justify-center border border-slate-200">
         <svg id="scan-barcode-svg" class="max-w-full"></svg>
-        <span id="barcode-error-msg" class="text-xs text-red-500 mt-1 hidden">※有効なJAN/ITFコード形式ではありません</span>
+        <span id="barcode-error-msg" class="text-xs text-red-500 mt-1 hidden">エラー: 無効な形式です</span>
       </div>
       <div class="space-y-2">
-        <p class="text-xs font-semibold text-slate-500">このバーコードでアクション:</p>
         <div class="grid grid-cols-2 gap-2">
           <button onclick="actionFromScan('search')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-magnifying-glass text-blue-600 text-lg"></i><div><div class="text-xs font-bold">商品検索 / 登録</div><div class="text-[10px] text-slate-500">マスターと照合</div></div>
+            <i class="fa-solid fa-magnifying-glass text-blue-600 text-lg"></i><div class="text-xs font-bold">商品検索 / 登録</div>
           </button>
           <button onclick="actionFromScan('predict')" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i><div><div class="text-xs font-bold">単品 ⇔ 箱JAN予測</div><div class="text-[10px] text-slate-500">末尾±1を推測</div></div>
+            <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i><div class="text-xs font-bold">単品 ⇔ 箱JAN予測</div>
           </button>
           <button onclick="actionFromScan('itf')" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i><div><div class="text-xs font-bold">ITF 14桁 変換</div><div class="text-[10px] text-slate-500">ITF⇔JAN 相互計算</div></div>
+            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i><div class="text-xs font-bold">ITF 14桁 変換</div>
           </button>
           <button onclick="actionFromScan('missing')" class="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-circle-question text-amber-600 text-lg"></i><div><div class="text-xs font-bold">欠損コード補完</div><div class="text-[10px] text-slate-500">かすれ桁の復元</div></div>
+            <i class="fa-solid fa-circle-question text-amber-600 text-lg"></i><div class="text-xs font-bold">欠損コード補完</div>
           </button>
         </div>
         <button onclick="addScanToFavorite()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition mt-1">
@@ -141,42 +133,41 @@
   <!-- 2. SEARCH -->
   <section id="section-search" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・JAN照合</h2>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・照合</h2>
       <div class="flex gap-2">
-        <input type="text" id="search-input" oninput="searchItem()" placeholder="商品名またはJANコードを入力" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="text" id="search-input" oninput="searchItem()" placeholder="商品名またはJANコード" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         <button onclick="searchItem()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm">検索</button>
       </div>
     </div>
     <div id="search-result-list" class="space-y-3"></div>
     <div id="form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
-        <span id="form-title"><i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録</span>
-        <button id="cancel-edit-btn" onclick="resetForm()" class="text-xs text-slate-500 hover:text-slate-700 hidden">編集をキャンセル</button>
+        <span id="form-title"><i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規登録</span>
+        <button id="cancel-edit-btn" onclick="resetForm()" class="text-xs text-slate-500 hover:text-slate-700 hidden">キャンセル</button>
       </h3>
       <form id="product-form" onsubmit="saveProduct(event)" class="space-y-3 text-sm">
         <input type="hidden" id="p-id" value="">
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
-          <input type="text" id="p-name" required placeholder="例: ○○お茶 500ml" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+          <input type="text" id="p-name" required placeholder="商品名" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
         <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN (13桁/8桁) *</label>
-            <input type="text" id="p-jan" required placeholder="4901234567890" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">ケース/箱JAN・ITF</label>
-            <input type="text" id="p-boxjan" placeholder="14901234567897" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN *</label>
+            <input type="text" id="p-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN・ITF</label>
+            <input type="text" id="p-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
-            <input type="number" id="p-price" oninput="updateBoxPriceCalc()" placeholder="150" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数 (ケース個数)</label>
-            <input type="number" id="p-qty" oninput="updateBoxPriceCalc()" placeholder="24" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+            <input type="number" id="p-price" oninput="updateBoxPriceCalc()" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+          <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数</label>
+            <input type="number" id="p-qty" oninput="updateBoxPriceCalc()" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
         </div>
-        <!-- 箱価格の自動計算表示 -->
         <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-2.5 text-xs text-indigo-900 flex justify-between items-center">
-          <span class="font-semibold"><i class="fa-solid fa-calculator text-indigo-600 mr-1"></i>箱（ケース）計算額:</span>
+          <span class="font-semibold"><i class="fa-solid fa-calculator text-indigo-600 mr-1"></i>箱計算額:</span>
           <span class="font-bold font-mono text-base text-indigo-700" id="calc-box-total">¥0</span>
         </div>
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
-          <input type="text" id="p-memo" placeholder="特売用 / 棚番: A-12" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        <button type="submit" id="submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">商品データを保存</button>
+          <input type="text" id="p-memo" placeholder="メモ" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <button type="submit" id="submit-btn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">保存</button>
       </form>
     </div>
   </section>
@@ -184,16 +175,10 @@
   <!-- 3. PREDICT -->
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算 (末尾 ±1)</h2>
-      <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-900 space-y-1">
-        <p class="font-bold"><i class="fa-solid fa-circle-info"></i> 単品・箱JAN相互予測ルール</p>
-        <p>• <b>＋1 (末尾+1)</b>：単品JANから<b>「箱JANを知りたい時」</b>に使用します。</p>
-        <p>• <b>−1 (末尾-1)</b>：箱JANから<b>「単品JANを知りたい時」</b>に使用します。</p>
-      </div>
-
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
       <div class="space-y-2">
-        <input type="text" id="predict-input" placeholder="元になるJANコード (例: 4901234567890)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
-        <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">予測候補を計算 (±1)</button>
+        <input type="text" id="predict-input" placeholder="JANコード" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">計算 (±1)</button>
       </div>
     </div>
     <div id="predict-results" class="space-y-2"></div>
@@ -202,9 +187,8 @@
   <!-- 4. ITF -->
   <section id="section-itf" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF (14桁) / JAN (13桁) 相互変換</h2>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF / JAN 相互変換</h2>
       <div class="space-y-2">
-        <label class="block text-xs font-semibold text-slate-600">コード入力</label>
         <input type="text" id="itf-input" placeholder="ITF (14桁) または JAN (13桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
         <div class="grid grid-cols-2 gap-2">
           <button onclick="convertITF('toJAN')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded-lg text-xs">ITF → JAN 変換</button>
@@ -213,9 +197,8 @@
       </div>
     </div>
     <div id="itf-result" class="bg-white rounded-xl shadow p-4 border border-slate-200 hidden space-y-3">
-      <h3 class="font-bold text-sm text-slate-700 border-b pb-2">変換結果</h3>
       <div class="p-3 bg-slate-50 rounded-lg space-y-1">
-        <div class="text-xs text-slate-500" id="itf-res-label">変換後コード</div>
+        <div class="text-xs text-slate-500" id="itf-res-label">変換結果</div>
         <div class="text-xl font-bold font-mono text-teal-700" id="itf-res-val">---</div>
         <div class="text-xs" id="itf-check-status">---</div>
       </div>
@@ -230,11 +213,10 @@
   <!-- 5. MISSING -->
   <section id="section-missing" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-circle-question text-amber-600"></i> 欠損JAN予測 (ワイルドカード検索)</h2>
-      <p class="text-xs text-slate-500">読みにくい文字部分を <code class="bg-slate-100 px-1 border rounded">?</code> や <code class="bg-slate-100 px-1 border rounded">*</code> に置き換えて入力してください。</p>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-circle-question text-amber-600"></i> 欠損JAN予測</h2>
       <div class="space-y-2">
-        <input type="text" id="missing-input" placeholder="例: 49012?456789? または 490123456789?" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
-        <button onclick="solveMissingJan()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg text-sm">チェックデジット適合候補を計算</button>
+        <input type="text" id="missing-input" placeholder="例: 49012?456789? (?/∗使用)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="solveMissingJan()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded-lg text-sm">候補計算</button>
       </div>
     </div>
     <div id="missing-results" class="space-y-2"></div>
@@ -251,14 +233,14 @@
   <!-- 7. HISTORY -->
   <section id="section-history" class="space-y-4 hidden">
     <div class="flex justify-between items-center">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-history text-slate-600"></i> スキャン & 操作履歴</h2>
-      <button onclick="clearHistory()" class="text-xs text-red-600 hover:underline">履歴消去</button>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-history text-slate-600"></i> 履歴</h2>
+      <button onclick="clearHistory()" class="text-xs text-red-600 hover:underline">消去</button>
     </div>
     <div id="history-list" class="space-y-2"></div>
   </section>
 </main>
 
-<!-- Barcode Modal -->
+<!-- Modals -->
 <div id="barcode-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -271,16 +253,14 @@
   </div>
 </div>
 
-<!-- Link Modal -->
 <div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800">既存商品に紐付け（更新）</h3>
+      <h3 class="font-bold text-slate-800">商品紐付け</h3>
       <button onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
-    <p class="text-xs text-slate-600">登録対象コード: <span id="link-code-display" class="font-mono font-bold text-blue-600"></span></p>
+    <p class="text-xs text-slate-600">対象コード: <span id="link-code-display" class="font-mono font-bold text-blue-600"></span></p>
     <div class="space-y-2">
-      <label class="block text-xs font-semibold text-slate-600">紐付け先の商品を選択:</label>
       <div id="link-product-list" class="max-h-60 overflow-y-auto space-y-2 border rounded-lg p-2 bg-slate-50"></div>
     </div>
     <div class="flex justify-end gap-2 pt-2">
@@ -289,42 +269,32 @@
   </div>
 </div>
 
-<!-- Account Modal (簡易「合言葉」オンライン同期システム) -->
 <div id="account-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-key text-blue-600"></i> 簡易合言葉でデータ同期</h3>
+      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-key text-blue-600"></i> データ同期</h3>
       <button onclick="toggleAccountModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
     
     <div id="account-login-view" class="space-y-3">
-      <p class="text-xs text-slate-600">メールアドレスは不要です。グループや店舗で決めた<b>「合言葉（グループID）」</b>を入力するだけで、複数端末のデータを自動で同期・共有できます。</p>
-      
       <div class="space-y-2">
-        <label class="block text-xs font-semibold text-slate-700">任意の合言葉（例: shop123, tanaka-pos）</label>
+        <label class="block text-xs font-semibold text-slate-700">合言葉（グループID）</label>
         <input type="text" id="acc-group-id" placeholder="合言葉を入力" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
-        <button onclick="connectSimpleGroup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs transition">この合言葉で同期スタート</button>
+        <button onclick="connectSimpleGroup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs transition">同期開始</button>
       </div>
     </div>
 
     <div id="account-logged-view" class="space-y-3 hidden">
       <div class="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-xs text-emerald-800 space-y-1">
-        <p class="font-bold"><i class="fa-solid fa-check-circle"></i> オンライン同期中</p>
-        <p>現在の合言葉: <span id="group-id-display" class="font-mono font-semibold text-base text-emerald-900"></span></p>
-        <p class="text-[11px] text-emerald-600">同じ合言葉を入力した他のスマホやPCと、商品マスターやリストが自動でリアルタイム共有されます。</p>
+        <p class="font-bold"><i class="fa-solid fa-check-circle"></i> 同期中</p>
+        <p>合言葉: <span id="group-id-display" class="font-mono font-semibold text-base text-emerald-900"></span></p>
       </div>
-      <button onclick="disconnectGroup()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 rounded-lg text-xs border border-red-200">同期を解除（オフラインに戻る）</button>
+      <button onclick="disconnectGroup()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2 rounded-lg text-xs border border-red-200">同期解除</button>
     </div>
   </div>
 </div>
 
 <script>
-// --- HTTPS CHECK ---
-if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-  const w = document.getElementById('https-warning'); if (w) w.classList.remove('hidden');
-}
-
-// --- UTIL ---
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -332,7 +302,6 @@ function loadJson(key) {
   try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch (_) { return []; }
 }
 
-// --- DATA STORE ---
 let currentGroupId = localStorage.getItem('jan_group_id') || null;
 let unsubscribeSnapshot = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
@@ -354,7 +323,6 @@ function saveDb() {
     localStorage.setItem('jan_history', JSON.stringify(db.history));
   } catch (_) {}
 
-  // 簡易グループIDでのFirebaseクラウド共有
   if (currentGroupId && window.firebaseEnabled) {
     const { dbFirestore, doc, setDoc } = window.firebaseAuth;
     setDoc(doc(dbFirestore, "groups", currentGroupId), {
@@ -365,7 +333,6 @@ function saveDb() {
   }
 }
 
-// --- SIMPLE GROUP ACCOUNT SYSTEM (簡易合言葉) ---
 window.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
     if (currentGroupId && window.firebaseEnabled) {
@@ -377,7 +344,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function connectSimpleGroup() {
   const groupId = document.getElementById('acc-group-id').value.trim();
   if (!groupId) return alert('合言葉を入力してください');
-  if (!window.firebaseEnabled) return alert("Firebaseの設定がされていません。コード内のfirebaseConfigを設定してください。");
+  if (!window.firebaseEnabled) return alert("Firebaseが設定されていません。Firebase設定を入力してください。");
   
   localStorage.setItem('jan_group_id', groupId);
   currentGroupId = groupId;
@@ -404,7 +371,6 @@ function startGroupSync(groupId) {
       saveDbToLocalOnly();
       renderSearchResults();
     } else {
-      // ドキュメントがまだ無ければ作成
       saveDb();
     }
   });
@@ -432,7 +398,6 @@ function toggleAccountModal() {
   document.getElementById('account-modal').classList.toggle('hidden');
 }
 
-// --- TABS ---
 function switchTab(tabId) {
   if (tabId !== 'scan' && isScanning) stopCamera();
   document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
@@ -444,7 +409,6 @@ function switchTab(tabId) {
   if (tabId === 'search') renderSearchResults();
 }
 
-// --- CHECK DIGIT ---
 function calcCheckDigit(codeWithoutCD) {
   const rev = String(codeWithoutCD).split('').reverse();
   let sum = 0;
@@ -460,9 +424,7 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-// =====================================================
-// CAMERA (縦横対応・高解像度最適化)
-// =====================================================
+// 縦横対応スキャナー設定
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner() {
@@ -485,26 +447,10 @@ function onDecoded(text) {
   onScanSuccess(code);
 }
 
-function cameraErrorMessage(err) {
-  const name = (err && err.name) || String(err);
-  const map = {
-    NotAllowedError: 'カメラの使用が許可されていません。ブラウザの設定でカメラを「許可」にしてください。',
-    NotFoundError: 'カメラが見つかりません。',
-    NotReadableError: '他のアプリがカメラを使用中の可能性があります。',
-    OverconstrainedError: 'カメラの設定に対応していません。',
-    SecurityError: 'HTTPS接続の環境で開いてください。'
-  };
-  return (map[name] || 'カメラを起動できませんでした。') + '\n\n[エラー: ' + name + ']';
-}
-
 async function startCamera() {
   if (starting) return;
   if (typeof Html5Qrcode === "undefined") {
-    alert("ライブラリの読み込みに失敗しました。ネット接続を確認してください。");
-    return;
-  }
-  if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    alert("HTTPS接続の通常のブラウザ(Safari/Chrome)で開いてください。");
+    alert("ライブラリのロードに失敗しました。");
     return;
   }
   starting = true;
@@ -512,13 +458,11 @@ async function startCamera() {
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
-  // 正方形のスキャンエリア(250x250)に設定し、スマホが縦・横どちらでも読めるよう調整
   const base = {
     fps: 20,
     disableFlip: true,
     qrbox: (w, h) => {
-      const minDim = Math.min(w, h);
-      const boxSize = Math.floor(minDim * 0.75);
+      const boxSize = Math.floor(Math.min(w, h) * 0.8);
       return { width: boxSize, height: boxSize };
     }
   };
@@ -554,38 +498,19 @@ async function startCamera() {
     }
   }
 
-  if (!started) {
-    try {
-      const cams = await Html5Qrcode.getCameras();
-      if (cams && cams.length) {
-        const back = cams.find(c => /back|rear|environment|背面/i.test(c.label)) || cams[cams.length - 1];
-        html5QrcodeScanner = createScanner();
-        isScanning = true;
-        await html5QrcodeScanner.start(back.id, base, onDecoded);
-        started = true;
-      }
-    } catch (e) { lastErr = e; isScanning = false; }
-  }
-
   starting = false;
   if (!started) {
-    console.error("カメラ起動失敗:", lastErr);
-    alert(cameraErrorMessage(lastErr));
+    alert("カメラを起動できませんでした。");
     resetCameraUI();
     return;
   }
   document.getElementById('btn-toggle-camera').innerHTML = '<i class="fa-solid fa-stop"></i> <span>スキャン停止</span>';
   document.getElementById('btn-toggle-camera').className = 'flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition';
-  document.getElementById('scan-status').textContent = 'スキャン中...';
+  document.getElementById('scan-status').textContent = 'スキャン中';
   setupCameraTools();
 }
 
 async function setupCameraTools() {
-  try {
-    await html5QrcodeScanner.applyVideoConstraints({
-      advanced: [{ focusMode: "continuous" }]
-    });
-  } catch (_) {}
   try {
     const caps = html5QrcodeScanner.getRunningTrackCameraCapabilities();
     const torch = caps.torchFeature(), zoom = caps.zoomFeature();
@@ -613,7 +538,7 @@ function stopCamera() {
   isScanning = false;
   html5QrcodeScanner = null;
   if (!s) { resetCameraUI(); return; }
-  s.stop().catch(e => console.error("Stop error:", e)).finally(() => {
+  s.stop().catch(e => console.error(e)).finally(() => {
     try { s.clear(); } catch (_) {}
     resetCameraUI();
   });
@@ -686,29 +611,25 @@ function actionFromScan(targetTab) {
 function addScanToFavorite() {
   if (!lastScannedCode) return;
   if (!db.favorites.find(f => f.jan === lastScannedCode)) {
-    db.favorites.unshift({ id: Date.now().toString(), name: 'JAN無し商品 (' + lastScannedCode + ')', jan: lastScannedCode });
+    db.favorites.unshift({ id: Date.now().toString(), name: 'JAN無し (' + lastScannedCode + ')', jan: lastScannedCode });
     saveDb();
-    alert('「JAN無し」リストに追加しました');
+    alert('保存しました');
   } else {
-    alert('既に「JAN無し」リストに追加されています');
+    alert('保存済みです');
   }
 }
 
-// =====================================================
-// SEARCH & MASTER (単品×点数=箱価格 計算機能付き)
-// =====================================================
 function updateBoxPriceCalc() {
   const p = parseFloat(document.getElementById('p-price').value) || 0;
   const q = parseFloat(document.getElementById('p-qty').value) || 0;
-  const total = p * q;
-  document.getElementById('calc-box-total').textContent = '¥' + total.toLocaleString();
+  document.getElementById('calc-box-total').textContent = '¥' + (p * q).toLocaleString();
 }
 
 function renderSearchResults(items = db.products) {
   const list = document.getElementById('search-result-list');
   list.innerHTML = '';
   if (items.length === 0) {
-    list.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">該当する商品データがありません</div>`;
+    list.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm">データなし</div>`;
     return;
   }
   items.forEach(item => {
@@ -722,17 +643,17 @@ function renderSearchResults(items = db.products) {
       <div class="space-y-1">
         <div class="font-bold text-slate-800 text-base flex items-center gap-2">
           ${esc(item.name)}
-          <button onclick="editProduct('${esc(item.id)}')" class="text-blue-500 hover:text-blue-700 text-xs p-1" title="編集"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="deleteProduct('${esc(item.id)}')" class="text-red-400 hover:text-red-600 text-xs p-1" title="削除"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="editProduct('${esc(item.id)}')" class="text-blue-500 hover:text-blue-700 text-xs p-1"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="deleteProduct('${esc(item.id)}')" class="text-red-400 hover:text-red-600 text-xs p-1"><i class="fa-solid fa-trash"></i></button>
         </div>
         <div class="text-xs text-slate-500 font-mono space-x-2">
-          <span>単品JAN: <b>${esc(item.jan)}</b></span>
+          <span>JAN: <b>${esc(item.jan)}</b></span>
           ${item.boxJan ? `<span class="text-indigo-600">箱JAN: <b>${esc(item.boxJan)}</b></span>` : ''}
         </div>
         <div class="text-xs text-slate-600 space-x-2">
-          <span>単品: ¥${esc(item.price || '-')}</span>
+          <span>¥${esc(item.price || '-')}</span>
           <span>入数: ${esc(item.qty || '-')}</span>
-          ${boxTotal ? `<span class="text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">箱額: ¥${boxTotal}</span>` : ''}
+          ${boxTotal ? `<span class="text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">箱: ¥${boxTotal}</span>` : ''}
         </div>
         ${item.memo ? `<div class="text-[11px] text-slate-400">${esc(item.memo)}</div>` : ''}
       </div>
@@ -764,8 +685,8 @@ function editProduct(id) {
   document.getElementById('p-qty').value = item.qty || '';
   document.getElementById('p-memo').value = item.memo || '';
   updateBoxPriceCalc();
-  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の編集';
-  document.getElementById('submit-btn').textContent = '商品データを更新';
+  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 編集';
+  document.getElementById('submit-btn').textContent = '更新';
   document.getElementById('cancel-edit-btn').classList.remove('hidden');
   document.getElementById('form-container').scrollIntoView({ behavior: 'smooth' });
 }
@@ -774,17 +695,16 @@ function resetForm() {
   document.getElementById('p-id').value = '';
   document.getElementById('product-form').reset();
   updateBoxPriceCalc();
-  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録';
-  document.getElementById('submit-btn').textContent = '商品データを保存';
+  document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規登録';
+  document.getElementById('submit-btn').textContent = '保存';
   document.getElementById('cancel-edit-btn').classList.add('hidden');
 }
 
 function deleteProduct(id) {
-  if (!confirm('この商品を削除してもよろしいですか？')) return;
+  if (!confirm('削除しますか？')) return;
   db.products = db.products.filter(p => p.id !== id);
   saveDb();
   renderSearchResults();
-  alert('削除しました');
 }
 
 function saveProduct(e) {
@@ -806,14 +726,10 @@ function saveProduct(e) {
     db.products.unshift(newP);
   }
   saveDb();
-  alert(id ? '更新が完了しました' : '登録が完了しました');
   resetForm();
   renderSearchResults();
 }
 
-// =====================================================
-// 候補カード共通 (予測 / 欠損補完)
-// =====================================================
 function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText = '') {
   const div = document.createElement('div');
   div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col gap-2 shadow-sm";
@@ -830,18 +746,17 @@ function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText 
     </div>
     <div class="flex gap-2 border-t pt-2">
       <button onclick="registerCodeDirect('${code}')" class="flex-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 py-1 rounded-lg text-xs font-bold border border-emerald-200"><i class="fa-solid fa-plus-circle"></i> 新規登録</button>
-      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded-lg text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存商品に紐付け</button>
+      <button onclick="openLinkModal('${code}')" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 py-1 rounded-lg text-xs font-bold border border-blue-200"><i class="fa-solid fa-link"></i> 既存紐付け</button>
     </div>`;
   container.appendChild(div);
 }
 
-// --- PREDICT (±1) ---
 function predictBoxJan() {
   const input = document.getElementById('predict-input').value.trim();
   const container = document.getElementById('predict-results');
   container.innerHTML = '';
   if (!/^\d{12,14}$/.test(input)) {
-    alert('12〜14桁の数字のJAN/ITFコードを入力してください');
+    alert('12〜14桁の数字を入力してください');
     return;
   }
   
@@ -849,8 +764,8 @@ function predictBoxJan() {
   const lastNum = parseInt(body.slice(-1), 10);
 
   const offsets = [
-    { offset: 1, label: '＋1 (箱JAN予測)', badge: '箱を知りたい時', desc: '単品JAN → 箱JAN' },
-    { offset: -1, label: '−1 (単品JAN予測)', badge: '単品を知りたい時', desc: '箱JAN → 単品JAN' }
+    { offset: 1, label: '＋1 (箱JAN)', badge: '箱予測', desc: '単品 → 箱' },
+    { offset: -1, label: '−1 (単品JAN)', badge: '単品予測', desc: '箱 → 単品' }
   ];
 
   offsets.forEach(item => {
@@ -864,7 +779,6 @@ function predictBoxJan() {
   addHistory('箱JAN予測(±1)', input);
 }
 
-// --- ITF ---
 function convertITF(mode) {
   const val = document.getElementById('itf-input').value.trim();
   const labelEl = document.getElementById('itf-res-label');
@@ -877,19 +791,19 @@ function convertITF(mode) {
     if (/^\d{14}$/.test(val)) {
       const janBody = val.slice(1, 13);
       result = janBody + calcCheckDigit(janBody);
-      labelEl.textContent = "JAN (13桁) 変換結果";
-    } else { alert('14桁のITFコードを入力してください'); return; }
+      labelEl.textContent = "JAN (13桁)";
+    } else { alert('14桁を入力してください'); return; }
   } else {
     if (/^\d{13}$/.test(val)) {
       const itfBody = '1' + val.slice(0, 12);
       result = itfBody + calcCheckDigit(itfBody);
-      labelEl.textContent = "ITF (14桁) 変換結果";
-    } else { alert('13桁のJANコードを入力してください'); return; }
+      labelEl.textContent = "ITF (14桁)";
+    } else { alert('13桁を入力してください'); return; }
   }
 
   valEl.textContent = result;
   const ok = isValidJan(result);
-  statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
+  statusEl.textContent = ok ? "✓ 正常" : "× チェックデジット不整合";
   statusEl.className = ok ? "text-xs text-emerald-600 font-bold" : "text-xs text-red-600 font-bold";
   document.getElementById('itf-btn-new').onclick = () => registerCodeDirect(result);
   document.getElementById('itf-btn-link').onclick = () => openLinkModal(result);
@@ -900,18 +814,17 @@ function convertITF(mode) {
   addHistory('ITF変換', `${val} -> ${result}`);
 }
 
-// --- MISSING ---
 function solveMissingJan() {
   const raw = document.getElementById('missing-input').value.trim();
   const container = document.getElementById('missing-results');
   container.innerHTML = '';
   if (!raw.includes('?') && !raw.includes('*')) {
-    alert('ワイルドカード(? または *)を含めて入力してください');
+    alert('? または * を含めて入力してください');
     return;
   }
   const missingCount = (raw.match(/[\?\*]/g) || []).length;
   if (missingCount > 2) {
-    alert('計算保護のため、欠損桁は最大2個までにしてください');
+    alert('欠損桁は2桁までにしてください');
     return;
   }
   const matches = [];
@@ -923,14 +836,13 @@ function solveMissingJan() {
     if (isValidJan(candidate)) matches.push(candidate);
   }
   if (matches.length === 0) {
-    container.innerHTML = `<div class="text-center py-4 text-xs text-slate-500">条件に合う有効なJANコードが見つかりませんでした</div>`;
+    container.innerHTML = `<div class="text-center py-4 text-xs text-slate-500">候補なし</div>`;
     return;
   }
-  matches.forEach(code => appendCodeCard(container, code, '', 'amber', '欠損補完コード'));
+  matches.forEach(code => appendCodeCard(container, code, '', 'amber', '補完コード'));
   addHistory('欠損補完', raw);
 }
 
-// --- LINK / REGISTER ---
 function registerCodeDirect(code) {
   switchTab('search');
   resetForm();
@@ -945,7 +857,7 @@ function openLinkModal(code) {
   const container = document.getElementById('link-product-list');
   container.innerHTML = '';
   if (db.products.length === 0) {
-    container.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">登録済み商品がありません</div>';
+    container.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">データなし</div>';
   } else {
     db.products.forEach(p => {
       const btn = document.createElement('button');
@@ -971,25 +883,22 @@ function executeLink(productId) {
   if (!item) return;
   if (pendingLinkCode.length === 14) {
     item.boxJan = pendingLinkCode;
-  } else if (confirm(`「${item.name}」のコードを更新しますか？\n（14桁以外のため単品JANとしてセットされます）`)) {
+  } else if (confirm(`「${item.name}」にセットしますか？`)) {
     item.jan = pendingLinkCode;
   } else {
     return;
   }
-  const code = pendingLinkCode;
   saveDb();
   closeLinkModal();
-  alert(`「${item.name}」にコード ${code} を紐付けました。`);
   switchTab('search');
   renderSearchResults();
 }
 
-// --- JAN-NASHI ---
 function renderFavorites() {
   const grid = document.getElementById('fav-grid');
   grid.innerHTML = '';
   if (db.favorites.length === 0) {
-    grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">登録された「JAN無し」商品はありません</div>`;
+    grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">データなし</div>`;
     return;
   }
   db.favorites.forEach(fav => {
@@ -1004,7 +913,7 @@ function renderFavorites() {
         <button onclick="removeFavorite('${esc(fav.id)}')" class="text-slate-300 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
       </div>
       <button class="fav-show w-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-bold py-2 rounded-lg text-xs flex items-center justify-center gap-1.5">
-        <i class="fa-solid fa-barcode text-base"></i> 全画面表示
+        <i class="fa-solid fa-barcode text-base"></i> 表示
       </button>`;
     card.querySelector('.fav-show').onclick = () => showBarcodeModal(fav.jan, fav.name);
     grid.appendChild(card);
@@ -1016,12 +925,11 @@ function removeFavorite(id) {
   renderFavorites();
 }
 
-// --- HISTORY ---
 function renderHistory() {
   const list = document.getElementById('history-list');
   list.innerHTML = '';
   if (db.history.length === 0) {
-    list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">履歴はありません</div>`;
+    list.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">履歴なし</div>`;
     return;
   }
   db.history.forEach(item => {
@@ -1045,7 +953,6 @@ function addHistory(type, val) {
 }
 function clearHistory() { db.history = []; saveDb(); renderHistory(); }
 
-// --- MODAL ---
 function showBarcodeModal(code, title) {
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-subtext').textContent = code;
