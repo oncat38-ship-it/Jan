@@ -14,24 +14,22 @@
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyBQHt-75N1TLsVzflkkodbADpqMSK3bDmw",
-  authDomain: "pass-2feef.firebaseapp.com",
-  projectId: "pass-2feef",
-  storageBucket: "pass-2feef.firebasestorage.app",
-  messagingSenderId: "928726808124",
-  appId: "1:928726808124:web:db251feec25d99f9faf539",
-  measurementId: "G-9KN1MHPB4S"
-};
+  // ご提示いただいたFirebase設定
+  const firebaseConfig = {
+    apiKey: "AIzaSyBQHt-75N1TLsVzflkkodbADpqMSK3bDmw",
+    authDomain: "pass-2feef.firebaseapp.com",
+    projectId: "pass-2feef",
+    storageBucket: "pass-2feef.firebasestorage.app",
+    messagingSenderId: "928726808124",
+    appId: "1:928726808124:web:db251feec25d99f9faf539",
+    measurementId: "G-9KN1MHPB4S"
+  };
 
   let dbFirestore;
   try {
-    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-      const app = initializeApp(firebaseConfig);
-      dbFirestore = getFirestore(app);
-      window.firebaseEnabled = true;
-    }
+    const app = initializeApp(firebaseConfig);
+    dbFirestore = getFirestore(app);
+    window.firebaseEnabled = true;
   } catch (e) {
     console.warn("Firebase not initialized:", e);
   }
@@ -50,6 +48,9 @@ const firebaseConfig = {
   <div class="max-w-4xl mx-auto px-4 py-2 flex justify-between items-center">
     <div class="flex items-center space-x-2"><i class="fa-solid fa-barcode text-2xl"></i><h1 class="font-bold text-xl tracking-wide">JAN Master Pro</h1></div>
     <div class="flex items-center gap-2">
+      <button onclick="toggleCalcModal()" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1 transition">
+        <i class="fa-solid fa-calculator"></i> 箱計算
+      </button>
       <button onclick="toggleAccountModal()" id="btn-account-status" class="text-xs bg-blue-700 hover:bg-blue-800 px-3 py-1.5 rounded-full text-blue-100 font-medium flex items-center gap-1.5 transition">
         <i class="fa-solid fa-key"></i> <span id="account-status-text">オフライン保存</span>
       </button>
@@ -60,11 +61,12 @@ const firebaseConfig = {
 <nav class="bg-white border-b border-slate-200 sticky top-[48px] z-40 shadow-sm overflow-x-auto">
   <div class="max-w-4xl mx-auto flex whitespace-nowrap text-sm text-slate-600 font-medium">
     <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center active-tab hover:bg-slate-50 transition"><i class="fa-solid fa-camera mr-1"></i>カメラ・結果</button>
+    <!-- 2ページ目に配置したJAN無しタブ -->
+    <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し</button>
     <button onclick="switchTab('search')" id="tab-search" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-magnifying-glass mr-1"></i>検索・登録</button>
     <button onclick="switchTab('predict')" id="tab-predict" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-boxes-packing mr-1"></i>単品⇔箱</button>
     <button onclick="switchTab('itf')" id="tab-itf" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>ITF変換</button>
     <button onclick="switchTab('missing')" id="tab-missing" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-circle-question mr-1"></i>欠損予測</button>
-    <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し</button>
     <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-history mr-1"></i>履歴</button>
   </div>
 </nav>
@@ -132,7 +134,18 @@ const firebaseConfig = {
     </div>
   </section>
 
-  <!-- 2. SEARCH -->
+  <!-- 2. JAN-NASHI (2ページ目に配置 & 最上部に検索バーを配備) -->
+  <section id="section-fav" class="space-y-4 hidden">
+    <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-500"></i> JAN無し商品検索</h2>
+      <div class="flex gap-2">
+        <input type="text" id="fav-search-input" oninput="renderFavorites()" placeholder="JAN無し商品の名前またはコードを検索" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500">
+      </div>
+    </div>
+    <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+  </section>
+
+  <!-- 3. SEARCH -->
   <section id="section-search" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・照合</h2>
@@ -159,13 +172,9 @@ const firebaseConfig = {
         </div>
         <div class="grid grid-cols-2 gap-2">
           <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
-            <input type="number" id="p-price" oninput="updateBoxPriceCalc()" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+            <input type="number" id="p-price" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
           <div><label class="block text-xs font-semibold text-slate-600 mb-1">入数</label>
-            <input type="number" id="p-qty" oninput="updateBoxPriceCalc()" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        </div>
-        <div class="bg-indigo-50 border border-indigo-100 rounded-lg p-2.5 text-xs text-indigo-900 flex justify-between items-center">
-          <span class="font-semibold"><i class="fa-solid fa-calculator text-indigo-600 mr-1"></i>箱計算額:</span>
-          <span class="font-bold font-mono text-base text-indigo-700" id="calc-box-total">¥0</span>
+            <input type="number" id="p-qty" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
         </div>
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
           <input type="text" id="p-memo" placeholder="メモ" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
@@ -174,7 +183,7 @@ const firebaseConfig = {
     </div>
   </section>
 
-  <!-- 3. PREDICT -->
+  <!-- 4. PREDICT -->
   <section id="section-predict" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
@@ -186,7 +195,7 @@ const firebaseConfig = {
     <div id="predict-results" class="space-y-2"></div>
   </section>
 
-  <!-- 4. ITF -->
+  <!-- 5. ITF -->
   <section id="section-itf" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF / JAN 相互変換</h2>
@@ -212,7 +221,7 @@ const firebaseConfig = {
     </div>
   </section>
 
-  <!-- 5. MISSING -->
+  <!-- 6. MISSING -->
   <section id="section-missing" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-circle-question text-amber-600"></i> 欠損JAN予測</h2>
@@ -222,14 +231,6 @@ const firebaseConfig = {
       </div>
     </div>
     <div id="missing-results" class="space-y-2"></div>
-  </section>
-
-  <!-- 6. JAN-NASHI -->
-  <section id="section-fav" class="space-y-4 hidden">
-    <div class="flex justify-between items-center">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-layer-group text-amber-500"></i> JAN無し商品リスト</h2>
-    </div>
-    <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
   </section>
 
   <!-- 7. HISTORY -->
@@ -243,6 +244,32 @@ const firebaseConfig = {
 </main>
 
 <!-- Modals -->
+
+<!-- 簡単箱計算モーダル -->
+<div id="calc-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-calculator text-blue-600"></i> 簡易箱計算ツール</h3>
+      <button onclick="toggleCalcModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="space-y-3 text-sm">
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
+        <input type="number" id="quick-price" oninput="runQuickCalc()" placeholder="例: 120" class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">入数 (個/箱)</label>
+        <input type="number" id="quick-qty" oninput="runQuickCalc()" placeholder="例: 24" class="w-full border rounded-lg px-3 py-2">
+      </div>
+      <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center space-y-1">
+        <span class="text-xs text-blue-700 font-bold">合計金額 (箱単価)</span>
+        <div class="text-2xl font-black font-mono text-blue-800" id="quick-total-display">¥0</div>
+      </div>
+    </div>
+    <button onclick="toggleCalcModal()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-sm">閉じる</button>
+  </div>
+</div>
+
 <div id="barcode-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -346,7 +373,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function connectSimpleGroup() {
   const groupId = document.getElementById('acc-group-id').value.trim();
   if (!groupId) return alert('合言葉を入力してください');
-  if (!window.firebaseEnabled) return alert("Firebaseが設定されていません。Firebase設定を入力してください。");
+  if (!window.firebaseEnabled) return alert("Firebaseが設定されていません。");
   
   localStorage.setItem('jan_group_id', groupId);
   currentGroupId = groupId;
@@ -372,6 +399,7 @@ function startGroupSync(groupId) {
       if (data.favorites) db.favorites = data.favorites;
       saveDbToLocalOnly();
       renderSearchResults();
+      renderFavorites();
     } else {
       saveDb();
     }
@@ -400,6 +428,16 @@ function toggleAccountModal() {
   document.getElementById('account-modal').classList.toggle('hidden');
 }
 
+function toggleCalcModal() {
+  document.getElementById('calc-modal').classList.toggle('hidden');
+}
+
+function runQuickCalc() {
+  const p = parseFloat(document.getElementById('quick-price').value) || 0;
+  const q = parseFloat(document.getElementById('quick-qty').value) || 0;
+  document.getElementById('quick-total-display').textContent = '¥' + (p * q).toLocaleString();
+}
+
 function switchTab(tabId) {
   if (tabId !== 'scan' && isScanning) stopCamera();
   document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
@@ -426,7 +464,7 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-// 縦横対応スキャナー設定
+// 読み込みやすさを重視したスキャナー設定
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner() {
@@ -444,7 +482,7 @@ function onDecoded(text) {
   if (!/^\d+$/.test(code) || !isValidJan(code)) return;
   if (code.length === 12) code = '0' + code;
   if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
-  if (sameCount < 2) return;
+  if (sameCount < 1) return; // 判定をスピーディにするため1回検出で即時確定
   lastRead = ""; sameCount = 0;
   onScanSuccess(code);
 }
@@ -460,32 +498,33 @@ async function startCamera() {
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
-  const base = {
-    fps: 20,
-    disableFlip: true,
+  const baseConfig = {
+    fps: 25, // フレームレートを上げてレスポンス向上
     qrbox: (w, h) => {
-      const boxSize = Math.floor(Math.min(w, h) * 0.8);
-      return { width: boxSize, height: boxSize };
-    }
+      // 読み取り領域を広げて枠から外れにくく調整
+      const minDim = Math.min(w, h);
+      return { width: Math.floor(minDim * 0.85), height: Math.floor(minDim * 0.65) };
+    },
+    aspectRatio: 1.0
   };
   
   const hiRes = { 
-    ...base, 
+    ...baseConfig, 
     videoConstraints: { 
       facingMode: "environment", 
       width: { ideal: 1920, min: 1280 }, 
       height: { ideal: 1080, min: 720 },
-      advanced: [{ focusMode: "continuous" }]
+      focusMode: "continuous"
     } 
   };
 
   const attempts = [
     () => [{ facingMode: "environment" }, hiRes],
-    () => [{ facingMode: "environment" }, base],
-    () => [{ facingMode: "user" }, base]
+    () => [{ facingMode: "environment" }, baseConfig],
+    () => [{ facingMode: "user" }, baseConfig]
   ];
 
-  let started = false, lastErr = null;
+  let started = false;
   for (const make of attempts) {
     try {
       html5QrcodeScanner = createScanner();
@@ -495,14 +534,14 @@ async function startCamera() {
       started = true;
       break;
     } catch (e) {
-      lastErr = e; isScanning = false;
+      isScanning = false;
       try { html5QrcodeScanner.clear(); } catch (_) {}
     }
   }
 
   starting = false;
   if (!started) {
-    alert("カメラを起動できませんでした。");
+    alert("カメラを起動できませんでした。ブラウザのカメラ権限を確認してください。");
     resetCameraUI();
     return;
   }
@@ -621,12 +660,6 @@ function addScanToFavorite() {
   }
 }
 
-function updateBoxPriceCalc() {
-  const p = parseFloat(document.getElementById('p-price').value) || 0;
-  const q = parseFloat(document.getElementById('p-qty').value) || 0;
-  document.getElementById('calc-box-total').textContent = '¥' + (p * q).toLocaleString();
-}
-
 function renderSearchResults(items = db.products) {
   const list = document.getElementById('search-result-list');
   list.innerHTML = '';
@@ -635,10 +668,6 @@ function renderSearchResults(items = db.products) {
     return;
   }
   items.forEach(item => {
-    const p = parseFloat(item.price) || 0;
-    const q = parseFloat(item.qty) || 0;
-    const boxTotal = (p * q > 0) ? (p * q).toLocaleString() : null;
-
     const div = document.createElement('div');
     div.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex justify-between items-center";
     div.innerHTML = `
@@ -655,7 +684,6 @@ function renderSearchResults(items = db.products) {
         <div class="text-xs text-slate-600 space-x-2">
           <span>¥${esc(item.price || '-')}</span>
           <span>入数: ${esc(item.qty || '-')}</span>
-          ${boxTotal ? `<span class="text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">箱: ¥${boxTotal}</span>` : ''}
         </div>
         ${item.memo ? `<div class="text-[11px] text-slate-400">${esc(item.memo)}</div>` : ''}
       </div>
@@ -686,7 +714,6 @@ function editProduct(id) {
   document.getElementById('p-price').value = item.price || '';
   document.getElementById('p-qty').value = item.qty || '';
   document.getElementById('p-memo').value = item.memo || '';
-  updateBoxPriceCalc();
   document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-pen-to-square text-blue-600"></i> 編集';
   document.getElementById('submit-btn').textContent = '更新';
   document.getElementById('cancel-edit-btn').classList.remove('hidden');
@@ -696,7 +723,6 @@ function editProduct(id) {
 function resetForm() {
   document.getElementById('p-id').value = '';
   document.getElementById('product-form').reset();
-  updateBoxPriceCalc();
   document.getElementById('form-title').innerHTML = '<i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規登録';
   document.getElementById('submit-btn').textContent = '保存';
   document.getElementById('cancel-edit-btn').classList.add('hidden');
@@ -898,12 +924,19 @@ function executeLink(productId) {
 
 function renderFavorites() {
   const grid = document.getElementById('fav-grid');
+  const query = (document.getElementById('fav-search-input')?.value || '').trim().toLowerCase();
   grid.innerHTML = '';
-  if (db.favorites.length === 0) {
-    grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">データなし</div>`;
+
+  let list = db.favorites;
+  if (query) {
+    list = list.filter(f => f.name.toLowerCase().includes(query) || f.jan.includes(query));
+  }
+
+  if (list.length === 0) {
+    grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">該当するデータなし</div>`;
     return;
   }
-  db.favorites.forEach(fav => {
+  list.forEach(fav => {
     const card = document.createElement('div');
     card.className = "bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between space-y-3";
     card.innerHTML = `
