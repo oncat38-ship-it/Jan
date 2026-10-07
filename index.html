@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Html5-Qrcode for Camera Scanning -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <!-- Html5-Qrcode for Camera Scanning (バージョンを安定版2.3.8に固定) -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <!-- JsBarcode for rendering barcodes -->
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
 
@@ -84,6 +84,7 @@
                     <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
                         <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
                         <p class="text-sm">ボタンを押してカメラを起動してください</p>
+                        <p id="https-warning" class="text-xs text-amber-300 hidden">※カメラ使用にはHTTPS接続（またはlocalhost）が必要です</p>
                     </div>
                 </div>
 
@@ -331,7 +332,7 @@
         </div>
     </div>
 
-    <!-- Product Link Dialog Modal (新機能: 既存商品への紐付け用) -->
+    <!-- Product Link Dialog Modal -->
     <div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
             <div class="flex justify-between items-center border-b pb-2">
@@ -352,6 +353,12 @@
     </div>
 
     <script>
+        // --- HTTPS CHECK ---
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            const warningEl = document.getElementById('https-warning');
+            if (warningEl) warningEl.classList.remove('hidden');
+        }
+
         // --- DATA STORE ---
         let db = {
             products: JSON.parse(localStorage.getItem('jan_products') || '[]'),
@@ -362,7 +369,7 @@
         let html5QrcodeScanner = null;
         let isScanning = false;
         let lastScannedCode = "";
-        let pendingLinkCode = ""; // 紐付け待機コード
+        let pendingLinkCode = "";
 
         if (db.products.length === 0) {
             db.products = [
@@ -407,13 +414,13 @@
         }
 
         function isValidJan(code) {
-            if (!/^\d{8}$|^\d{13}$\vert{}^\d{14}$/.test(code)) return false;
+            if (!/^\d{8}$|^\d{13}$|^\d{14}$/.test(code)) return false;
             const body = code.slice(0, -1);
             const cd = parseInt(code.slice(-1), 10);
             return calcCheckDigit(body) === cd;
         }
 
-        // --- CAMERA SCANNER LOGIC (IMPROVED ACCURACY) ---
+        // --- CAMERA SCANNER LOGIC (ROBUST IMPLEMENTATION) ---
         function toggleCamera() {
             if (isScanning) {
                 stopCamera();
@@ -422,23 +429,22 @@
             }
         }
 
-        function startCamera() {
+        async function startCamera() {
+            if (typeof Html5Qrcode === "undefined") {
+                alert("バーコードスキャンライブラリの読み込みに失敗しています。ネット接続を確認してください。");
+                return;
+            }
+
             document.getElementById('camera-placeholder').classList.add('hidden');
             document.getElementById('scan-status').textContent = 'スキャン中...';
             document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
-            html5QrcodeScanner = new Html5Qrcode("reader");
+            if (!html5QrcodeScanner) {
+                html5QrcodeScanner = new Html5Qrcode("reader");
+            }
 
-            // フォーマットを限定して高速・高精度化
-            const formatsToSupport = [
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.CODE_128
-            ];
-
-            const cameraConfig = {
-                fps: 20,
+            const scanConfig = {
+                fps: 15,
                 qrbox: (viewfinderWidth, viewfinderHeight) => {
                     const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                     return {
@@ -446,25 +452,32 @@
                         height: Math.floor(minEdge * 0.45)
                     };
                 },
-                aspectRatio: 1.777778,
-                formatsToSupport: formatsToSupport,
-                experimentalFeatures: {
-                    useBarCodeDetectorIfSupported: true
-                }
+                aspectRatio: 1.777778
             };
 
-            html5QrcodeScanner.start(
-                { 
-                    facingMode: "environment",
-                    width: { min: 1280, ideal: 1920 },
-                    height: { min: 720, ideal: 1080 }
-                },
-                cameraConfig,
-                onScanSuccess
-            ).catch(err => {
-                alert("カメラ起動に失敗しました: " + err);
-                stopCamera();
-            });
+            try {
+                // 優先パターン1: 背面カメラ指定
+                await html5QrcodeScanner.start(
+                    { facingMode: "environment" },
+                    scanConfig,
+                    onScanSuccess
+                );
+            } catch (err1) {
+                console.warn("環境指定でのカメラ起動に失敗。一般設定で再試行します:", err1);
+                try {
+                    // 優先パターン2: 制約なしで利用可能なデフォルトカメラを試行
+                    await html5QrcodeScanner.start(
+                        { facingMode: "user" },
+                        scanConfig,
+                        onScanSuccess
+                    );
+                } catch (err2) {
+                    console.error("カメラの起動に完全失敗:", err2);
+                    alert("カメラを起動できませんでした。\n・ブラウザのカメラ権限が許可されているか\n・HTTPS接続環境か\nをご確認ください。");
+                    resetCameraUI();
+                    return;
+                }
+            }
 
             isScanning = true;
             document.getElementById('btn-toggle-camera').innerHTML = '<i class="fa-solid fa-stop"></i> <span>スキャン停止</span>';
@@ -472,11 +485,13 @@
         }
 
         function stopCamera() {
-            if (html5QrcodeScanner) {
+            if (html5QrcodeScanner && isScanning) {
                 html5QrcodeScanner.stop().then(() => {
-                    html5QrcodeScanner.clear();
                     resetCameraUI();
-                }).catch(() => resetCameraUI());
+                }).catch((err) => {
+                    console.error("Stop error:", err);
+                    resetCameraUI();
+                });
             } else {
                 resetCameraUI();
             }
