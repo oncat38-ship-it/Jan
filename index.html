@@ -22,7 +22,6 @@
         #reader video {
             object-fit: cover !important;
             border-radius: 0.75rem;
-            width: 100% !important;
         }
     </style>
 </head>
@@ -58,7 +57,7 @@
                 <i class="fa-solid fa-circle-question mr-1"></i>欠損予測
             </button>
             <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition">
-                <i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し
+                <i class="fa-solid fa-star mr-1 text-amber-500"></i>JAN無し商品
             </button>
             <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition">
                 <i class="fa-solid fa-history mr-1"></i>履歴
@@ -99,7 +98,7 @@
             <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
                 <div class="flex justify-between items-start border-b pb-3">
                     <div>
-                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">最新のスキャン結果</span>
+                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">読み込み完了 JAN/ITF</span>
                         <div class="text-2xl font-black text-slate-900 font-mono tracking-widest mt-0.5" id="scan-code-val">----</div>
                     </div>
                     <button onclick="closeScanResult()" class="text-slate-400 hover:text-slate-600 p-1">
@@ -115,7 +114,7 @@
 
                 <!-- Direct Action Buttons -->
                 <div class="space-y-2">
-                    <p class="text-xs font-semibold text-slate-500">このバーコードでアクション:</p>
+                    <p class="text-xs font-semibold text-slate-500">このバーコードで操作:</p>
                     <div class="grid grid-cols-2 gap-2">
                         <button onclick="actionFromScan('search')" class="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
                             <i class="fa-solid fa-magnifying-glass text-blue-600 text-lg"></i>
@@ -151,7 +150,7 @@
                     </div>
 
                     <button onclick="addScanToFavorite()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition mt-1">
-                        <i class="fa-solid fa-layer-group text-amber-500"></i> 「JAN無し」リストに保存
+                        <i class="fa-solid fa-star text-amber-500"></i> JAN無し商品リストに登録
                     </button>
                 </div>
             </div>
@@ -161,7 +160,7 @@
         <section id="section-search" class="space-y-4 hidden">
             <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
                 <h2 class="font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-magnifying-glass text-blue-600"></i> 商品検索・JAN照合
+                    <i class="fa-solid fa-magnifying-glass text-blue-600"></i> 登録済み商品検索 (名前 / JAN)
                 </h2>
                 <div class="flex gap-2">
                     <input type="text" id="search-input" oninput="searchItem()" placeholder="商品名またはJANコードを入力" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -172,7 +171,7 @@
             <!-- Search Results Display -->
             <div id="search-result-list" class="space-y-3"></div>
 
-            <!-- Add/Edit Master Modal Form -->
+            <!-- Add Master Form -->
             <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
                 <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
                     <span><i class="fa-solid fa-plus-circle text-emerald-600"></i> 新規商品マスター登録</span>
@@ -213,13 +212,13 @@
             </div>
         </section>
 
-        <!-- 3. SINGLE <-> BOX JAN PREDICTION -->
+        <!-- 3. PREDICTION SECTION -->
         <section id="section-predict" class="space-y-4 hidden">
             <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
                 <h2 class="font-bold text-slate-800 flex items-center gap-2">
                     <i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測計算
                 </h2>
-                <p class="text-xs text-slate-500">商品コード末尾の数字変化（±1等）から正確なチェックデジットを自動計算して候補を表示します。</p>
+                <p class="text-xs text-slate-500">コード末尾の数値変化から正しいチェックデジット付きのJAN候補を生成します。</p>
                 <div class="space-y-2">
                     <input type="text" id="predict-input" placeholder="元になるJANコード (例: 4901234567890)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
                     <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">
@@ -231,7 +230,7 @@
             <div id="predict-results" class="space-y-2"></div>
         </section>
 
-        <!-- 4. ITF <-> JAN CONVERSION -->
+        <!-- 4. ITF CONVERSION SECTION -->
         <section id="section-itf" class="space-y-4 hidden">
             <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
                 <h2 class="font-bold text-slate-800 flex items-center gap-2">
@@ -282,11 +281,11 @@
             <div id="missing-results" class="space-y-2"></div>
         </section>
 
-        <!-- 6. JAN-NASHI LIST -->
+        <!-- 6. JAN-NASHI (FAVORITE) LIST -->
         <section id="section-fav" class="space-y-4 hidden">
             <div class="flex justify-between items-center">
                 <h2 class="font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-layer-group text-amber-500"></i> JAN無し商品リスト
+                    <i class="fa-solid fa-star text-amber-500"></i> JAN無し商品リスト
                 </h2>
             </div>
             <div id="fav-grid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
@@ -336,7 +335,6 @@
         let isScanning = false;
         let lastScannedCode = "";
 
-        // Sample initial data if empty
         if (db.products.length === 0) {
             db.products = [
                 { id: '1', name: '緑茶 500ml', jan: '4901234567890', boxJan: '14901234567897', price: 140, qty: 24, memo: '常温棚 A-1' },
@@ -386,7 +384,7 @@
             return calcCheckDigit(body) === cd;
         }
 
-        // --- CAMERA SCANNER LOGIC (IMPROVED ACCURACY & AUTO-STOP) ---
+        // --- CAMERA SCANNER (OPTIMIZED HIGH PRECISION) ---
         function toggleCamera() {
             if (isScanning) {
                 stopCamera();
@@ -401,22 +399,21 @@
             document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
             html5QrcodeScanner = new Html5Qrcode("reader");
-
-            // High precision camera constraints
-            const cameraConfig = {
-                fps: 15,
+            
+            // 解像度＆スキャンレート最適化（読み込み精度UP）
+            const config = { 
+                fps: 15, 
                 qrbox: { width: 300, height: 160 },
-                aspectRatio: 1.777778,
                 videoConstraints: {
                     facingMode: "environment",
-                    width: { min: 640, ideal: 1280, max: 1920 },
-                    height: { min: 480, ideal: 720, max: 1080 }
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
                 }
             };
 
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
-                cameraConfig,
+                config,
                 onScanSuccess
             ).catch(err => {
                 alert("カメラの起動に失敗しました: " + err);
@@ -449,19 +446,19 @@
         }
 
         function onScanSuccess(decodedText) {
-            // Auto stop camera upon scan completion
-            stopCamera();
-
             playBeep();
             
+            // 読み込んだらカメラ停止
+            stopCamera();
+
             lastScannedCode = decodedText;
             addHistory('カメラ読取', decodedText);
 
-            // Display Header Result Box
-            document.getElementById('scan-result-card').classList.remove('hidden');
+            // 確認画面表示 ＆ 自動スクロール
+            const card = document.getElementById('scan-result-card');
+            card.classList.remove('hidden');
             document.getElementById('scan-code-val').textContent = decodedText;
 
-            // Render Barcode image dynamically
             const svgEl = document.getElementById('scan-barcode-svg');
             const errEl = document.getElementById('barcode-error-msg');
             try {
@@ -484,6 +481,8 @@
                     errEl.classList.remove('hidden');
                 }
             }
+
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         function closeScanResult() {
@@ -502,7 +501,7 @@
             } catch(e) {}
         }
 
-        // --- ACTION ROUTER FROM SCAN CARD ---
+        // --- ACTION ROUTER ---
         function actionFromScan(targetTab) {
             if (!lastScannedCode) return;
 
@@ -527,17 +526,17 @@
             if (!exists) {
                 db.favorites.unshift({
                     id: Date.now().toString(),
-                    name: 'JAN無し商品 (' + lastScannedCode + ')',
+                    name: 'スキャン品 (' + lastScannedCode + ')',
                     jan: lastScannedCode
                 });
                 saveDb();
-                alert('「JAN無し」リストに追加しました');
+                alert('JAN無し商品リストに追加しました');
             } else {
-                alert('既に「JAN無し」リストに追加されています');
+                alert('既に追加されています');
             }
         }
 
-        // --- SEARCH & MASTER (NAME & JAN SEARCH) ---
+        // --- SEARCH & MASTER ---
         function renderSearchResults(items = db.products) {
             const list = document.getElementById('search-result-list');
             list.innerHTML = '';
@@ -589,7 +588,6 @@
                 (p.boxJan && p.boxJan.includes(query))
             );
             renderSearchResults(filtered);
-            addHistory('検索', query);
         }
 
         function saveProduct(e) {
@@ -611,7 +609,7 @@
             renderSearchResults();
         }
 
-        // --- PREDICTION LOGIC (WITHOUT PACKAGING INDICATOR OPTION) ---
+        // --- PREDICTION LOGIC ---
         function predictBoxJan() {
             const input = document.getElementById('predict-input').value.trim();
             const container = document.getElementById('predict-results');
@@ -625,7 +623,6 @@
             const body = input.slice(0, -1);
             const candidates = [];
 
-            // 末尾±1, ±2の純粋なコード変化予測のみ
             for (let offset = -2; offset <= 2; offset++) {
                 if (offset === 0) continue;
                 const lastNum = parseInt(body.slice(-1), 10);
@@ -722,9 +719,7 @@
                 return;
             }
 
-            const pattern = raw.replace(/[\?\*]/g, '\\d');
             const matches = [];
-
             const max = Math.pow(10, missingCount);
             for (let i = 0; i < max; i++) {
                 let fill = String(i).padStart(missingCount, '0');
@@ -762,7 +757,7 @@
             grid.innerHTML = '';
 
             if (db.favorites.length === 0) {
-                grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">登録された「JAN無し」商品はありません</div>`;
+                grid.innerHTML = `<div class="col-span-full text-center py-8 text-slate-400 text-sm">登録されたJAN無し商品がありません</div>`;
                 return;
             }
 
