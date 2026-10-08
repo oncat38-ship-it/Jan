@@ -1555,12 +1555,17 @@ function showBarcodeModal(code, title) {
     let format = "EAN13";
     if (code.length === 8) format = "EAN8";
     if (code.length === 14) format = "ITF14";
-    JsBarcode("#modal-barcode-svg", code, { format, width: 2.5, height: 80, displayValue: true });
+    JsBarcode("#modal-barcode-svg", code, { format, width: 2, height: 60, displayValue: true });
   } catch (e) {
-    try { JsBarcode("#modal-barcode-svg", code, { format: "CODE128", width: 2.5, height: 80, displayValue: true }); } catch (_) {}
+    try {
+      JsBarcode("#modal-barcode-svg", code, { format: "CODE128", width: 2, height: 60, displayValue: true });
+    } catch (err) {}
   }
 }
-function closeModal() { document.getElementById('barcode-modal').classList.add('hidden'); }
+
+function closeModal() {
+  document.getElementById('barcode-modal').classList.add('hidden');
+}
 </script>
 </body>
 </html>
