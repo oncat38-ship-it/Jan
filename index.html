@@ -93,7 +93,7 @@
                     <div id="interactive" class="viewport"></div>
                     <div id="cameraPlaceholder" class="absolute text-white text-center">
                         <i class="fa-solid fa-camera text-4xl mb-2 opacity-50"></i>
-                        <p class="text-sm">カメラ起動中または停止中</p>
+                        <p class="text-sm" id="cameraStatusText">カメラ起動中または停止中</p>
                     </div>
                     <!-- Target Overlay -->
                     <div class="absolute inset-0 border-2 border-dashed border-red-500/50 pointer-events-none m-8 rounded flex items-center justify-center">
@@ -403,6 +403,7 @@
         let currentScannedCode = '';
         let currentActivePanel = null;
         let calcMode = 'singleToBox';
+        let activeMediaStream = null;
 
         let db = null;
         let syncGroupId = localStorage.getItem('jan_master_sync_id') || '';
@@ -433,7 +434,7 @@
             }
         }
 
-        // --- Camera Logic with Standard WebRTC and Error Catching ---
+        // --- Camera Logic with MediaDevices Permission Pre-flight & Fallbacks ---
         function toggleCamera() {
             if (isCameraRunning) {
                 stopCamera();
@@ -442,8 +443,38 @@
             }
         }
 
-        function startCamera() {
-            // カメラ権限および起動設定の最適化（ダイアログブロック回避）
+        async function startCamera() {
+            // 1. セキュアコンテキスト (HTTPS / localhost) チェック
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                alert("カメラを起動するには、接続をHTTPS化するかlocalhost環境で動作させてください。");
+                return;
+            }
+
+            // 2. ブラウザの MediaDevices API 対応確認
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("お使いのブラウザはカメラアクセス（getUserMedia API）に対応していません。別のブラウザをお試しください。");
+                return;
+            }
+
+            // 3. 事前カメラパーミッションの確保（権限の自動遮断を回避）
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                activeMediaStream = stream; // アクティブストリーム保持
+            } catch (err) {
+                console.error("Camera permission error:", err);
+                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+                    alert("カメラへのアクセス許可が拒否されています。ブラウザのアドレスバー付近からカメラ利用を「許可」に切り替えて更新してください。");
+                } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+                    alert("利用可能なカメラが見つかりません。");
+                } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
+                    alert("カメラが他のアプリで既に使用されているか、システムにロックされています。他のアプリを閉じて再試行してください。");
+                } else {
+                    alert(`カメラへのアクセス時にエラーが発生しました: ${err.message}`);
+                }
+                return;
+            }
+
+            // 4. Quagga2の起動初期化
             Quagga.init({
                 inputStream: {
                     name: "Live",
@@ -468,7 +499,8 @@
             }, function(err) {
                 if (err) {
                     console.error("Quagga initialization error:", err);
-                    alert("カメラの初期化に失敗しました。ブラウザのカメラアクセス許可状態を確認してください。");
+                    alert("バーコード認識エンジンの初期化に失敗しました。再読み込みをお試しください。");
+                    stopCamera();
                     return;
                 }
                 Quagga.start();
@@ -478,17 +510,31 @@
                 document.getElementById('btn-camera-toggle').querySelector('span').innerText = 'カメラ停止';
             });
 
+            Quagga.offDetected(onBarcodeScanned);
             Quagga.onDetected(onBarcodeScanned);
         }
 
         function stopCamera() {
+            // Quagga停止
             if (isCameraRunning) {
-                Quagga.stop();
+                try { Quagga.stop(); } catch (e) { console.log(e); }
                 isCameraRunning = false;
-                document.getElementById('cameraPlaceholder').classList.remove('hidden');
-                document.getElementById('btn-camera-toggle').classList.replace('bg-red-600', 'bg-blue-600');
-                document.getElementById('btn-camera-toggle').querySelector('span').innerText = 'カメラ開始';
             }
+
+            // ブラウザのMediaStreamTrackのリソース開放（カメラの完全停止）
+            if (activeMediaStream) {
+                activeMediaStream.getTracks().forEach(track => track.stop());
+                activeMediaStream = null;
+            }
+
+            const activeTrack = Quagga.CameraAccess.getActiveTrack();
+            if (activeTrack) {
+                try { activeTrack.stop(); } catch (e) {}
+            }
+
+            document.getElementById('cameraPlaceholder').classList.remove('hidden');
+            document.getElementById('btn-camera-toggle').classList.replace('bg-red-600', 'bg-blue-600');
+            document.getElementById('btn-camera-toggle').querySelector('span').innerText = 'カメラ開始';
         }
 
         function toggleTorch() {
@@ -851,7 +897,7 @@
             }
         }
 
-        // --- Wildcard Restorer (Updated for 3+ wildcard detection warning) ---
+        // --- Wildcard Restorer ---
         function restoreWildcardJAN(pattern) {
             const listContainer = document.getElementById('restorationList');
             const area = document.getElementById('restorationArea');
@@ -921,7 +967,7 @@
             return parseInt(code[code.length - 1], 10) === expected;
         }
 
-        // --- Database CRUD (Updated with Individual Barcode Buttons) ---
+        // --- Database CRUD ---
         function saveScannedToDB() {
             const name = document.getElementById('saveName').value.trim();
             const singleJan = document.getElementById('saveSingleJan').value.trim();
