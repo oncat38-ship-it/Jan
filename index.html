@@ -9,6 +9,8 @@
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>')</script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<!-- OCRライブラリ (数字テキスト読み取り用) -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -38,7 +40,7 @@
 
 <style>
 .active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
-#reader video{border-radius:.75rem; object-fit: cover;}
+#reader video, #field-reader video{border-radius:.75rem; object-fit: cover;}
 
 /* バーコード認識ガイドフレーム */
 .scan-guide-overlay {
@@ -50,8 +52,8 @@
   justify-content: center;
 }
 .scan-guide-box {
-  width: 82%;
-  height: 140px;
+  width: 85%;
+  height: 150px;
   border: 2px dashed rgba(59, 130, 246, 0.8);
   border-radius: 12px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
@@ -108,12 +110,11 @@
   <section id="section-scan" class="space-y-4">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200">
       <div class="flex justify-between items-center mb-3">
-        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> 高精度スキャナー</h2>
+        <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-camera text-blue-600"></i> 高精度・遠距離スキャナー</h2>
         <span id="scan-status" class="text-xs px-2 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold">待機中</span>
       </div>
       <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[300px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
-        <!-- 最適化ガイドライン表示 -->
         <div id="scan-guide" class="scan-guide-overlay hidden">
           <div id="guide-box" class="scan-guide-box"></div>
         </div>
@@ -219,7 +220,6 @@
     </div>
     <div id="predict-results" class="space-y-2"></div>
 
-    <!-- 商品管理・検索・修正枠 -->
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <div class="flex justify-between items-center border-b pb-2">
         <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2"><i class="fa-solid fa-sliders text-blue-600"></i> 登録商品の検索・手動修正・紐付け</h3>
@@ -246,14 +246,14 @@
           <div>
             <div class="flex justify-between items-center mb-1">
               <label class="text-xs font-semibold text-slate-600">単品JAN *</label>
-              <button type="button" onclick="scanToField('mp-jan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> カメラ読取</button>
+              <button type="button" onclick="scanToField('mp-jan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> 数字OCR読取</button>
             </div>
             <input type="text" id="mp-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
           </div>
           <div>
             <div class="flex justify-between items-center mb-1">
               <label class="text-xs font-semibold text-slate-600">箱JAN・ITF</label>
-              <button type="button" onclick="scanToField('mp-boxjan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> カメラ読取</button>
+              <button type="button" onclick="scanToField('mp-boxjan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> 数字OCR読取</button>
             </div>
             <input type="text" id="mp-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
           </div>
@@ -342,17 +342,20 @@
   </div>
 </div>
 
-<!-- 簡易スキャナーダイアログ (手動入力枠からの撮影用) -->
+<!-- OCR数字読み取りダイアログ -->
 <div id="field-scan-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読取</h3>
+      <h3 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-eye text-blue-600"></i> 13桁数字 OCR自動解析</h3>
       <button onclick="closeFieldScanModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
     <div class="relative overflow-hidden rounded-lg bg-black min-h-[220px] flex items-center justify-center">
-      <div id="field-reader" class="w-full"></div>
-      <div class="scan-guide-overlay"><div class="scan-guide-box" style="width:90%; height:100px;"></div></div>
+      <video id="ocr-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
+      <div class="scan-guide-overlay">
+        <div class="scan-guide-box" style="width:90%; height:80px;"></div>
+      </div>
     </div>
+    <div id="ocr-status-text" class="text-xs text-center text-blue-600 font-bold">13桁の数字部分を枠内に収めてください...</div>
     <button onclick="closeFieldScanModal()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs">キャンセル</button>
   </div>
 </div>
@@ -435,11 +438,16 @@ function loadJson(key) {
 let currentGroupId = localStorage.getItem('jan_group_id') || null;
 let unsubscribeSnapshot = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
-let html5QrcodeScanner = null, fieldScanner = null, isScanning = false, starting = false, torchOn = false;
+let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
 let lastScannedCode = "", lastRead = "", sameCount = 0;
 let calcMode = 'box';
 let currentBase64Image = "";
 let pendingLinkData = null, targetScanFieldId = null;
+
+/* OCR制御変数 */
+let ocrStream = null;
+let ocrInterval = null;
+let isOcrProcessing = false;
 
 if (db.products.length === 0) {
   db.products = [
@@ -585,7 +593,7 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-/* カメラ精度・解像度・最適化ガイド */
+/* 1. 高精度・遠距離オートフォーカス対応スキャナー */
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
 function createScanner(elementId = "reader") {
@@ -605,7 +613,6 @@ function onDecoded(text) {
   if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
   if (sameCount < 1) return;
   
-  // 視覚フィードバック
   const guideBox = document.getElementById('guide-box');
   if (guideBox) guideBox.classList.add('success');
 
@@ -622,26 +629,27 @@ async function startCamera() {
   starting = true;
   document.getElementById('camera-placeholder').classList.add('hidden');
   document.getElementById('scan-guide').classList.remove('hidden');
-  document.getElementById('scan-status').textContent = '起動中...';
+  document.getElementById('scan-status').textContent = 'ピント調整・起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
   const baseConfig = {
     fps: 30,
-    qrbox: (w, h) => ({ width: Math.floor(w * 0.85), height: Math.floor(h * 0.45) }),
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.90), height: Math.floor(h * 0.50) }),
     aspectRatio: 1.0
   };
   
-  const hiResConstraints = { 
+  /* オートフォーカス・高解像度最適化制約 */
+  const ultraPrecisionConstraints = { 
     facingMode: "environment", 
     width: { ideal: 1920, min: 1280 }, 
     height: { ideal: 1080, min: 720 },
-    focusMode: { ideal: "continuous" },
-    exposureMode: { ideal: "continuous" }
+    focusMode: { ideal: "continuous", exact: "continuous" },
+    advanced: [{ focusMode: "continuous" }, { zoom: 1.3 }]
   };
 
   const attempts = [
-    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: hiResConstraints }],
-    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: hiResConstraints }],
+    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: ultraPrecisionConstraints }],
+    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: ultraPrecisionConstraints }],
     () => [{ facingMode: "environment" }, baseConfig],
     () => [true, baseConfig]
   ];
@@ -680,7 +688,11 @@ async function setupCameraTools() {
     document.getElementById('btn-torch').style.display = torch.isSupported() ? 'block' : 'none';
     if (zoom.isSupported()) {
       const r = document.getElementById('zoom-range');
-      r.min = zoom.min(); r.max = zoom.max(); r.step = zoom.step() || 0.1; r.value = zoom.min();
+      r.min = zoom.min(); r.max = zoom.max(); r.step = zoom.step() || 0.1;
+      // 遠距離対応で微精度のデフォルト倍率(1.2〜1.5倍)を設定
+      const defaultZoom = Math.min(1.3, zoom.max());
+      r.value = defaultZoom;
+      setZoom(defaultZoom);
       document.getElementById('zoom-wrap').style.display = 'flex';
     } else {
       document.getElementById('zoom-wrap').style.display = 'none';
@@ -778,7 +790,6 @@ function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText 
   const div = document.createElement('div');
   div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:justify-between sm:items-center shadow-sm gap-2";
   
-  // 単品・箱の相互関係に基づく即時紐付け用データの準備
   let unitCode = code, boxCode = originalInput;
   if (label.includes('＋1') || label.includes('箱')) {
     unitCode = originalInput;
@@ -828,7 +839,6 @@ function predictBoxJan() {
   addHistory('箱JAN予測(±1)', input);
 }
 
-/* 単品⇔箱の即時紐付けモーダル機能 */
 function openLinkModal(unitJan, boxJan) {
   pendingLinkData = { unitJan, boxJan };
   document.getElementById('link-jan-val').textContent = unitJan;
@@ -859,7 +869,6 @@ function confirmLinkSave() {
   searchManageItem();
 }
 
-/* 単品⇔箱JAN予測ページ内の検索・手動修正・管理枠 */
 function searchManageItem() {
   const q = (document.getElementById('manage-search-input')?.value || '').trim().toLowerCase();
   const list = document.getElementById('manage-result-list');
@@ -953,28 +962,78 @@ function saveManageProduct(e) {
   searchManageItem();
 }
 
-/* 修正フォーム指定項目へのカメラ読み取り入力機能 */
-function scanToField(fieldId) {
+/* 2. 紐付け・手動入力用「13桁数字 OCR自動解析読み取り」 */
+async function scanToField(fieldId) {
   targetScanFieldId = fieldId;
   document.getElementById('field-scan-modal').classList.remove('hidden');
-  fieldScanner = createScanner("field-reader");
-  fieldScanner.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 220, height: 90 } }, (text) => {
-    let code = String(text).trim();
-    if (/^\d+$/.test(code) && isValidJan(code)) {
-      playBeep();
-      document.getElementById(targetScanFieldId).value = code;
-      closeFieldScanModal();
-    }
-  }).catch(e => {
-    alert("カメラが読み込めませんでした");
+  document.getElementById('ocr-status-text').textContent = "13桁の数字部分を枠内に収めてください...";
+  
+  const video = document.getElementById('ocr-video');
+  try {
+    ocrStream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: "environment",
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        focusMode: { ideal: "continuous" }
+      }
+    });
+    video.srcObject = ocrStream;
+    
+    // 定期フレームキャプチャ・OCR実行
+    ocrInterval = setInterval(() => {
+      captureAndRecognizeNumber(video);
+    }, 700);
+  } catch (err) {
+    alert("カメラを起動できませんでした: " + err.message);
     closeFieldScanModal();
-  });
+  }
+}
+
+async function captureAndRecognizeNumber(video) {
+  if (isOcrProcessing || !ocrStream) return;
+  isOcrProcessing = true;
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Tesseract.jsによる高速数字解析
+    const result = await Tesseract.recognize(canvas, 'eng', {
+      tessedit_char_whitelist: '0123456789'
+    });
+
+    const text = result.data.text.replace(/\s+/g, '');
+    // 連続する13桁（または14桁）の数字列を探す
+    const match = text.match(/\d{13,14}/);
+
+    if (match) {
+      const extractedCode = match[0];
+      if (isValidJan(extractedCode) || extractedCode.length === 14) {
+        playBeep();
+        if (navigator.vibrate) navigator.vibrate(80);
+        document.getElementById(targetScanFieldId).value = extractedCode;
+        
+        // 得られた数字を即座にバーコード表示モーダルでビジュアル確認
+        showBarcodeModal(extractedCode, "読み取り成功 (13/14桁)");
+        closeFieldScanModal();
+      }
+    }
+  } catch (e) {
+    console.warn("OCR Parsing error:", e);
+  } finally {
+    isOcrProcessing = false;
+  }
 }
 
 function closeFieldScanModal() {
-  if (fieldScanner) {
-    fieldScanner.stop().then(() => fieldScanner.clear()).catch(() => {});
-    fieldScanner = null;
+  if (ocrInterval) { clearInterval(ocrInterval); ocrInterval = null; }
+  if (ocrStream) {
+    ocrStream.getTracks().forEach(track => track.stop());
+    ocrStream = null;
   }
   document.getElementById('field-scan-modal').classList.add('hidden');
   targetScanFieldId = null;
@@ -1042,7 +1101,6 @@ function solveMissingJan() {
   addHistory('欠損補完', raw);
 }
 
-/* JAN無し機能 */
 function openFavForm(id = null, presetJan = '') {
   const form = document.getElementById('fav-form-container');
   form.classList.remove('hidden');
