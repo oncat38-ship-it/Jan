@@ -192,7 +192,7 @@
         </div>
       </div>
 
-      <!-- その場で完結できる派生操作エリア（ボタンの真下に結果が開く構造） -->
+      <!-- その場で完結できる派生操作エリア -->
       <div class="space-y-3 pt-1">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button onclick="toggleInPlacePredict()" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
@@ -218,7 +218,7 @@
           </button>
         </div>
 
-        <!-- その場展開コンテンツ: 箱JAN予測結果 (ボタン群の直下に表示) -->
+        <!-- その場展開コンテンツ: 箱JAN予測結果 -->
         <div id="inplace-predict-box" class="bg-slate-50 p-3 rounded-xl border border-indigo-100 space-y-2 hidden">
           <div class="text-xs font-bold text-indigo-900 border-b pb-1 flex items-center justify-between">
             <span><i class="fa-solid fa-boxes-packing"></i> 単品 ⇔ 箱JAN 予測結果 (±1)</span>
@@ -227,7 +227,7 @@
           <div id="inplace-predict-results" class="space-y-2"></div>
         </div>
 
-        <!-- その場展開コンテンツ: ネット検索箱JAN候補 (ボタン群の直下に表示) -->
+        <!-- その場展開コンテンツ: ネット検索箱JAN候補 -->
         <div id="inplace-web-box" class="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2 hidden">
           <div class="text-xs font-bold text-amber-900 border-b border-amber-200 pb-1 flex items-center justify-between">
             <span><i class="fa-solid fa-globe"></i> ネット情報に基づくJAN・関連候補 (2〜3件)</span>
@@ -236,7 +236,7 @@
           <div id="inplace-web-results" class="space-y-2"></div>
         </div>
 
-        <!-- その場展開コンテンツ: ITF➔JAN変換結果 (ボタン群の直下に表示) -->
+        <!-- その場展開コンテンツ: ITF➔JAN変換結果 -->
         <div id="inplace-itf-box" class="bg-slate-50 p-3 rounded-xl border border-teal-100 space-y-2 hidden">
           <div class="text-xs font-bold text-teal-900 border-b pb-1"><i class="fa-solid fa-arrow-right-to-bracket"></i> ITF14 ➔ JAN 変換結果</div>
           <div class="space-y-1 font-mono text-xs">
@@ -944,7 +944,6 @@ async function searchWebForBoxJan() {
     if (data && data.hits && data.hits.length > 0) {
       data.hits.forEach(hit => {
         const title = hit.name || '';
-        // 13桁または8桁のJANコードのみ抽出（14桁ITFは除外）
         const matches = title.match(/(?:JAN)?[:\s]*(\d{8}|\d{13})/g) || [];
         matches.forEach(m => {
           const cleanCode = m.replace(/\D/g, '');
@@ -957,7 +956,6 @@ async function searchWebForBoxJan() {
       });
     }
 
-    // デモ用補完（実検索で十分な候補がない場合も予測±1等に基づき2~3件提示）
     if (candidates.length < 2 && jan.length === 13) {
       const body = jan.slice(0, -1);
       const lastNum = parseInt(body.slice(-1), 10);
@@ -977,7 +975,6 @@ async function searchWebForBoxJan() {
       }
     }
 
-    // 最大3件に制限
     const finalCandidates = candidates.slice(0, 3);
 
     if (finalCandidates.length === 0) {
@@ -1008,7 +1005,7 @@ async function searchWebForBoxJan() {
   }
 }
 
-/* その場完結: 単品⇔箱JAN 予測のトグル展開 (ボタンの直下に開く) */
+/* その場完結: 単品⇔箱JAN 予測のトグル展開 */
 function toggleInPlacePredict() {
   const box = document.getElementById('inplace-predict-box');
   if (!box.classList.contains('hidden')) {
@@ -1016,7 +1013,6 @@ function toggleInPlacePredict() {
     return;
   }
   
-  // 他の展開欄を閉じる
   document.getElementById('inplace-web-box').classList.add('hidden');
   document.getElementById('inplace-itf-box').classList.add('hidden');
 
@@ -1065,7 +1061,7 @@ function toggleInPlacePredict() {
   box.classList.remove('hidden');
 }
 
-/* その場完結: ITF14➔JAN変換のトグル展開 (一方通行・ボタンの直下に開く) */
+/* その場完結: ITF14➔JAN変換のトグル展開 */
 function toggleInPlaceITF() {
   const box = document.getElementById('inplace-itf-box');
   if (!box.classList.contains('hidden')) {
@@ -1073,7 +1069,6 @@ function toggleInPlaceITF() {
     return;
   }
 
-  // 他の展開欄を閉じる
   document.getElementById('inplace-web-box').classList.add('hidden');
   document.getElementById('inplace-predict-box').classList.add('hidden');
 
