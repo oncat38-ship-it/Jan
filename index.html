@@ -96,7 +96,7 @@
     <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center active-tab hover:bg-slate-50 transition"><i class="fa-solid fa-camera mr-1"></i>カメラ・結果</button>
     <button onclick="switchTab('fav')" id="tab-fav" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-layer-group mr-1 text-amber-500"></i>JAN無し</button>
     <button onclick="switchTab('predict')" id="tab-predict" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-boxes-packing mr-1"></i>単品⇔箱・管理</button>
-    <button onclick="switchTab('itf')" id="tab-itf" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-arrow-right-arrow-left mr-1"></i>ITF変換</button>
+    <button onclick="switchTab('itf')" id="tab-itf" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-arrow-right-to-bracket mr-1"></i>ITF➔JAN解読</button>
     <button onclick="switchTab('missing')" id="tab-missing" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-circle-question mr-1"></i>欠損予測</button>
     <button onclick="switchTab('history')" id="tab-history" class="flex-1 py-3 px-3 text-center hover:bg-slate-50 transition"><i class="fa-solid fa-history mr-1"></i>履歴</button>
   </div>
@@ -174,15 +174,25 @@
         </div>
         <div class="space-y-1 text-xs">
           <div id="linked-product-name" class="font-bold text-slate-800 text-sm">---</div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 font-mono text-slate-600">
-            <div>単品JAN: <b id="linked-unit-jan" class="text-slate-900">---</b></div>
-            <div>箱JAN: <b id="linked-box-jan" class="text-indigo-700">---</b></div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-slate-600 items-center">
+            <div class="flex items-center justify-between bg-white p-1.5 rounded border border-indigo-100">
+              <span>単品JAN: <b id="linked-unit-jan" class="text-slate-900">---</b></span>
+              <button id="btn-show-unit-bc" onclick="" class="text-[10px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                <i class="fa-solid fa-barcode"></i> 表示
+              </button>
+            </div>
+            <div class="flex items-center justify-between bg-white p-1.5 rounded border border-indigo-100">
+              <span>箱JAN: <b id="linked-box-jan" class="text-indigo-700">---</b></span>
+              <button id="btn-show-box-bc" onclick="" class="text-[10px] bg-indigo-100 hover:bg-indigo-200 text-indigo-800 font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                <i class="fa-solid fa-barcode"></i> 表示
+              </button>
+            </div>
           </div>
           <div id="linked-details" class="text-slate-500 pt-0.5">---</div>
         </div>
       </div>
 
-      <!-- その場で完結できる派生操作エリア -->
+      <!-- その場で完結できる派生操作エリア（ボタンの真下に結果が開く構造） -->
       <div class="space-y-3 pt-1">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button onclick="toggleInPlacePredict()" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
@@ -196,28 +206,19 @@
             <i class="fa-solid fa-globe text-amber-600 text-lg"></i>
             <div>
               <div class="text-xs font-bold">ネット情報探索</div>
-              <div class="text-[10px] text-amber-700">箱JAN候補を検索</div>
+              <div class="text-[10px] text-amber-700">JAN候補を検索</div>
             </div>
           </button>
           <button onclick="toggleInPlaceITF()" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
-            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i>
+            <i class="fa-solid fa-arrow-right-to-bracket text-teal-600 text-lg"></i>
             <div>
-              <div class="text-xs font-bold">ITF 14桁 変換</div>
-              <div class="text-[10px] text-teal-600">相互変換</div>
+              <div class="text-xs font-bold">ITF14 ➔ JAN変換</div>
+              <div class="text-[10px] text-teal-600">13桁JAN取得</div>
             </div>
           </button>
         </div>
 
-        <!-- その場展開コンテンツ: ネット検索箱JAN候補 -->
-        <div id="inplace-web-box" class="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2 hidden">
-          <div class="text-xs font-bold text-amber-900 border-b border-amber-200 pb-1 flex items-center justify-between">
-            <span><i class="fa-solid fa-globe"></i> ネット情報に基づく箱JAN・関連候補</span>
-            <span id="web-search-spinner" class="text-[10px] text-amber-700 hidden animate-pulse">検索中...</span>
-          </div>
-          <div id="inplace-web-results" class="space-y-2"></div>
-        </div>
-
-        <!-- その場展開コンテンツ: 箱JAN予測結果 -->
+        <!-- その場展開コンテンツ: 箱JAN予測結果 (ボタン群の直下に表示) -->
         <div id="inplace-predict-box" class="bg-slate-50 p-3 rounded-xl border border-indigo-100 space-y-2 hidden">
           <div class="text-xs font-bold text-indigo-900 border-b pb-1 flex items-center justify-between">
             <span><i class="fa-solid fa-boxes-packing"></i> 単品 ⇔ 箱JAN 予測結果 (±1)</span>
@@ -226,9 +227,18 @@
           <div id="inplace-predict-results" class="space-y-2"></div>
         </div>
 
-        <!-- その場展開コンテンツ: ITF変換結果 -->
+        <!-- その場展開コンテンツ: ネット検索箱JAN候補 (ボタン群の直下に表示) -->
+        <div id="inplace-web-box" class="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2 hidden">
+          <div class="text-xs font-bold text-amber-900 border-b border-amber-200 pb-1 flex items-center justify-between">
+            <span><i class="fa-solid fa-globe"></i> ネット情報に基づくJAN・関連候補 (2〜3件)</span>
+            <span id="web-search-spinner" class="text-[10px] text-amber-700 hidden animate-pulse">検索中...</span>
+          </div>
+          <div id="inplace-web-results" class="space-y-2"></div>
+        </div>
+
+        <!-- その場展開コンテンツ: ITF➔JAN変換結果 (ボタン群の直下に表示) -->
         <div id="inplace-itf-box" class="bg-slate-50 p-3 rounded-xl border border-teal-100 space-y-2 hidden">
-          <div class="text-xs font-bold text-teal-900 border-b pb-1"><i class="fa-solid fa-arrow-right-arrow-left"></i> ITF / JAN 変換結果</div>
+          <div class="text-xs font-bold text-teal-900 border-b pb-1"><i class="fa-solid fa-arrow-right-to-bracket"></i> ITF14 ➔ JAN 変換結果</div>
           <div class="space-y-1 font-mono text-xs">
             <div id="inplace-itf-label" class="text-slate-500">---</div>
             <div id="inplace-itf-val" class="text-lg font-bold text-teal-800">---</div>
@@ -292,7 +302,7 @@
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
       <div class="space-y-2">
-        <input type="text" id="predict-input" placeholder="JANコード (12〜14桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <input type="text" id="predict-input" placeholder="JANコード (12〜13桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
         <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">計算 (±1)</button>
       </div>
     </div>
@@ -326,8 +336,8 @@
             <input type="text" id="mp-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN・ITF</label>
-            <input type="text" id="mp-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+            <label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN</label>
+            <input type="text" id="mp-boxjan" placeholder="13桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
           </div>
         </div>
 
@@ -344,21 +354,19 @@
     </div>
   </section>
 
-  <!-- 4. ITF -->
+  <!-- 4. ITF ➔ JAN 変換 (一方通行) -->
   <section id="section-itf" class="space-y-4 hidden">
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-arrow-left text-teal-600"></i> ITF / JAN 相互変換</h2>
+      <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-arrow-right-to-bracket text-teal-600"></i> ITF14 ➔ JAN 解読 (一方通行)</h2>
+      <p class="text-xs text-slate-500">14桁のITFケースコードから元となる13桁JANコードを抽出・確認します。</p>
       <div class="space-y-2">
-        <input type="text" id="itf-input" placeholder="ITF (14桁) または JAN (13桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
-        <div class="grid grid-cols-2 gap-2">
-          <button onclick="convertITF('toJAN')" class="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded-lg text-xs">ITF → JAN 変換</button>
-          <button onclick="convertITF('toITF')" class="bg-teal-800 hover:bg-teal-900 text-white font-bold py-2 rounded-lg text-xs">JAN → ITF14 変換</button>
-        </div>
+        <input type="text" id="itf-input" placeholder="ITF (14桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <button onclick="convertITFToJAN()" class="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 rounded-lg text-xs">ITF14 ➔ JAN(13桁) 解読実行</button>
       </div>
     </div>
     <div id="itf-result" class="bg-white rounded-xl shadow p-4 border border-slate-200 hidden space-y-3">
       <div class="p-3 bg-slate-50 rounded-lg space-y-1">
-        <div class="text-xs text-slate-500" id="itf-res-label">変換結果</div>
+        <div class="text-xs text-slate-500" id="itf-res-label">解読結果 JAN(13桁)</div>
         <div class="text-xl font-bold font-mono text-teal-700" id="itf-res-val">---</div>
         <div class="text-xs" id="itf-check-status">---</div>
       </div>
@@ -515,8 +523,8 @@ let pendingLinkData = null;
 
 if (db.products.length === 0) {
   db.products = [
-    { id: '1', name: '緑茶 500ml', jan: '4901234567890', boxJan: '14901234567897', price: 140, qty: 24, memo: '常温棚 A-1' },
-    { id: '2', name: 'ポテトチップス', jan: '4909876543210', boxJan: '14909876543217', price: 120, qty: 12, memo: 'お菓子コーナー' }
+    { id: '1', name: '緑茶 500ml', jan: '4901234567890', boxJan: '4901234567891', price: 140, qty: 24, memo: '常温棚 A-1' },
+    { id: '2', name: 'ポテトチップス', jan: '4909876543210', boxJan: '4909876543211', price: 120, qty: 12, memo: 'お菓子コーナー' }
   ];
   saveDb();
 }
@@ -871,8 +879,30 @@ function checkAndDisplayLinkedData(code) {
   document.getElementById('linked-role-badge').className = isUnitMatch ? "text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full" : "text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full";
 
   document.getElementById('linked-product-name').textContent = found.name;
-  document.getElementById('linked-unit-jan').textContent = found.jan || '未登録';
-  document.getElementById('linked-box-jan').textContent = found.boxJan || '未登録';
+  
+  const unitJanVal = found.jan || '未登録';
+  const boxJanVal = found.boxJan || '未登録';
+  
+  document.getElementById('linked-unit-jan').textContent = unitJanVal;
+  document.getElementById('linked-box-jan').textContent = boxJanVal;
+  
+  // バーコード表示ボタンイベントのセット
+  const btnUnit = document.getElementById('btn-show-unit-bc');
+  const btnBox = document.getElementById('btn-show-box-bc');
+  
+  if (found.jan) {
+    btnUnit.style.display = 'inline-flex';
+    btnUnit.onclick = () => showBarcodeModal(found.jan, `${found.name} (単品JAN)`);
+  } else {
+    btnUnit.style.display = 'none';
+  }
+
+  if (found.boxJan) {
+    btnBox.style.display = 'inline-flex';
+    btnBox.onclick = () => showBarcodeModal(found.boxJan, `${found.name} (箱JAN)`);
+  } else {
+    btnBox.style.display = 'none';
+  }
   
   let details = [];
   if (found.price) details.push(`価格: ¥${Number(found.price).toLocaleString()}`);
@@ -883,7 +913,7 @@ function checkAndDisplayLinkedData(code) {
   boxEl.classList.remove('hidden');
 }
 
-/* ネット情報探索（箱JAN・ITFコード候補探索） */
+/* ネット情報探索（JAN候補探索：ITFを除外して2〜3件表示） */
 async function searchWebForBoxJan() {
   const box = document.getElementById('inplace-web-box');
   const resultsEl = document.getElementById('inplace-web-results');
@@ -894,49 +924,68 @@ async function searchWebForBoxJan() {
     return;
   }
 
+  // 他の展開欄を閉じる
+  document.getElementById('inplace-predict-box').classList.add('hidden');
+  document.getElementById('inplace-itf-box').classList.add('hidden');
+
   const jan = lastScannedCode;
   resultsEl.innerHTML = '';
   spinner.classList.remove('hidden');
   box.classList.remove('hidden');
 
   try {
-    // Yahoo!ショッピング等のAPIエンドポイント経由で製品データやケースJAN候補を探す
     const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=dj00aiZpPVptRzh3R3A2TjhYVCZzPWNvbnN1bWVyc2VydmljZSZzPXR3d3Rlc3Q-&jan_code=${jan}`);
     const data = await res.json();
     
     spinner.classList.add('hidden');
 
     const candidates = [];
-    
-    // 標準14桁ITFの標準生成候補
-    if (jan.length === 13) {
-      const stdItfBody = '1' + jan.slice(0, 12);
-      const stdItf = stdItfBody + calcCheckDigit(stdItfBody);
-      candidates.push({ code: stdItf, label: '標準ケースITF(14桁)', source: '自動計算規約' });
-    }
 
     if (data && data.hits && data.hits.length > 0) {
-      const hit = data.hits[0];
-      const title = hit.name || '';
-      
-      // テキストから13桁/14桁コードパターンを検出
-      const matches = title.match(/(?:ケース|箱|ITF|JAN)?[:\s]*(\d{13,14})/g) || [];
-      matches.forEach(m => {
-        const cleanCode = m.replace(/\D/g, '');
-        if ((cleanCode.length === 13 || cleanCode.length === 14) && cleanCode !== jan) {
-          if (!candidates.some(c => c.code === cleanCode)) {
-            candidates.push({ code: cleanCode, label: title.slice(0, 20) + '...', source: '商品情報' });
+      data.hits.forEach(hit => {
+        const title = hit.name || '';
+        // 13桁または8桁のJANコードのみ抽出（14桁ITFは除外）
+        const matches = title.match(/(?:JAN)?[:\s]*(\d{8}|\d{13})/g) || [];
+        matches.forEach(m => {
+          const cleanCode = m.replace(/\D/g, '');
+          if ((cleanCode.length === 13 || cleanCode.length === 8) && cleanCode !== jan) {
+            if (!candidates.some(c => c.code === cleanCode)) {
+              candidates.push({ code: cleanCode, label: title.slice(0, 22) + '...', source: '商品情報' });
+            }
           }
-        }
+        });
       });
     }
 
-    if (candidates.length === 0) {
-      resultsEl.innerHTML = `<div class="text-xs text-amber-800 p-2">ネット上に明確な箱JAN情報が見つかりませんでした。Standard ITF14等の予測計算をご活用ください。</div>`;
+    // デモ用補完（実検索で十分な候補がない場合も予測±1等に基づき2~3件提示）
+    if (candidates.length < 2 && jan.length === 13) {
+      const body = jan.slice(0, -1);
+      const lastNum = parseInt(body.slice(-1), 10);
+      
+      const p1 = body.slice(0, -1) + ((lastNum + 1) % 10);
+      const c1 = p1 + calcCheckDigit(p1);
+      if (!candidates.some(c => c.code === c1)) {
+        candidates.push({ code: c1, label: '箱/関連JAN 候補 (+1)', source: '予測計算' });
+      }
+
+      if (candidates.length < 3) {
+        const p2 = body.slice(0, -1) + ((lastNum + 9) % 10);
+        const c2 = p2 + calcCheckDigit(p2);
+        if (!candidates.some(c => c.code === c2)) {
+          candidates.push({ code: c2, label: '関連JAN 候補 (-1)', source: '予測計算' });
+        }
+      }
+    }
+
+    // 最大3件に制限
+    const finalCandidates = candidates.slice(0, 3);
+
+    if (finalCandidates.length === 0) {
+      resultsEl.innerHTML = `<div class="text-xs text-amber-800 p-2">明確な関連JAN情報が見つかりませんでした。</div>`;
       return;
     }
 
-    candidates.forEach(c => {
+    finalCandidates.forEach(c => {
       const div = document.createElement('div');
       div.className = "bg-white p-2.5 rounded-lg border border-amber-200 flex justify-between items-center text-xs shadow-sm";
       div.innerHTML = `
@@ -955,27 +1004,11 @@ async function searchWebForBoxJan() {
 
   } catch (err) {
     spinner.classList.add('hidden');
-    // オフラインまたはAPI取得不能時のフォールバック (標準ITF計算のみを安全に提案)
-    if (jan.length === 13) {
-      const stdItfBody = '1' + jan.slice(0, 12);
-      const stdItf = stdItfBody + calcCheckDigit(stdItfBody);
-      resultsEl.innerHTML = `
-        <div class="bg-white p-2.5 rounded-lg border border-amber-200 flex justify-between items-center text-xs">
-          <div>
-            <div class="font-bold text-slate-800">標準ITFケース14桁 (予測)</div>
-            <div class="font-mono font-bold text-amber-800 text-sm">${stdItf}</div>
-          </div>
-          <button onclick="openLinkModal('${esc(jan)}', '${esc(stdItf)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded font-bold text-[11px]">
-            紐付け
-          </button>
-        </div>`;
-    } else {
-      resultsEl.innerHTML = `<div class="text-xs text-red-500 p-1">ネット検索を実行できませんでした</div>`;
-    }
+    resultsEl.innerHTML = `<div class="text-xs text-red-500 p-1">ネット検索を実行できませんでした</div>`;
   }
 }
 
-/* その場完結: 単品⇔箱JAN 予測のトグル展開 */
+/* その場完結: 単品⇔箱JAN 予測のトグル展開 (ボタンの直下に開く) */
 function toggleInPlacePredict() {
   const box = document.getElementById('inplace-predict-box');
   if (!box.classList.contains('hidden')) {
@@ -983,12 +1016,16 @@ function toggleInPlacePredict() {
     return;
   }
   
+  // 他の展開欄を閉じる
+  document.getElementById('inplace-web-box').classList.add('hidden');
+  document.getElementById('inplace-itf-box').classList.add('hidden');
+
   const container = document.getElementById('inplace-predict-results');
   container.innerHTML = '';
   const input = lastScannedCode;
   
-  if (!/^\d{12,14}$/.test(input)) {
-    container.innerHTML = `<div class="text-xs text-red-500">12〜14桁コードでのみ計算可能です</div>`;
+  if (!/^\d{12,13}$/.test(input)) {
+    container.innerHTML = `<div class="text-xs text-red-500">12〜13桁JANコードでのみ計算可能です</div>`;
   } else {
     const body = input.slice(0, -1);
     const lastNum = parseInt(body.slice(-1), 10);
@@ -1004,7 +1041,7 @@ function toggleInPlacePredict() {
       const predictedCode = newBody + cd;
 
       let unitCode = predictedCode, boxCode = input;
-      if (item.offset === 1) { // ＋1（箱JAN予測）の場合
+      if (item.offset === 1) { 
         unitCode = input;
         boxCode = predictedCode;
       }
@@ -1028,7 +1065,7 @@ function toggleInPlacePredict() {
   box.classList.remove('hidden');
 }
 
-/* その場完結: ITF変換のトグル展開 */
+/* その場完結: ITF14➔JAN変換のトグル展開 (一方通行・ボタンの直下に開く) */
 function toggleInPlaceITF() {
   const box = document.getElementById('inplace-itf-box');
   if (!box.classList.contains('hidden')) {
@@ -1036,36 +1073,32 @@ function toggleInPlaceITF() {
     return;
   }
 
+  // 他の展開欄を閉じる
+  document.getElementById('inplace-web-box').classList.add('hidden');
+  document.getElementById('inplace-predict-box').classList.add('hidden');
+
   const val = lastScannedCode;
   const labelEl = document.getElementById('inplace-itf-label');
   const valEl = document.getElementById('inplace-itf-val');
   const statusEl = document.getElementById('inplace-itf-status');
 
-  let result = "";
   if (/^\d{14}$/.test(val)) {
     const janBody = val.slice(1, 13);
-    result = janBody + calcCheckDigit(janBody);
-    labelEl.textContent = "ITF14 ➔ JAN(13桁) 変換結果:";
-  } else if (/^\d{13}$/.test(val)) {
-    const itfBody = '1' + val.slice(0, 12);
-    result = itfBody + calcCheckDigit(itfBody);
-    labelEl.textContent = "JAN(13桁) ➔ ITF14 変換結果:";
+    const result = janBody + calcCheckDigit(janBody);
+    labelEl.textContent = "ITF14 ➔ JAN(13桁) 抽出結果:";
+    valEl.textContent = result;
+    const ok = isValidJan(result);
+    statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
+    statusEl.className = ok ? "text-[11px] text-emerald-600 font-bold" : "text-[11px] text-red-600 font-bold";
+
+    try {
+      JsBarcode("#inplace-itf-svg", result, { format: "EAN13", width: 2, height: 40, displayValue: true });
+    } catch (e) {}
   } else {
     labelEl.textContent = "エラー:";
-    valEl.textContent = "13桁または14桁コードが必要です";
+    valEl.textContent = "14桁のITFケースコードが必要です";
     statusEl.textContent = "";
-    box.classList.remove('hidden');
-    return;
   }
-
-  valEl.textContent = result;
-  const ok = isValidJan(result);
-  statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
-  statusEl.className = ok ? "text-[11px] text-emerald-600 font-bold" : "text-[11px] text-red-600 font-bold";
-
-  try {
-    JsBarcode("#inplace-itf-svg", result, { format: result.length === 14 ? "ITF14" : "EAN13", width: 2, height: 40, displayValue: true });
-  } catch (e) {}
 
   box.classList.remove('hidden');
 }
@@ -1117,8 +1150,8 @@ function predictBoxJan() {
   const input = document.getElementById('predict-input').value.trim();
   const container = document.getElementById('predict-results');
   container.innerHTML = '';
-  if (!/^\d{12,14}$/.test(input)) {
-    alert('12〜14桁の数字を入力してください');
+  if (!/^\d{12,13}$/.test(input)) {
+    alert('12〜13桁の数字を入力してください');
     return;
   }
   
@@ -1291,37 +1324,32 @@ function saveManageProduct(e) {
   searchManageItem();
 }
 
-function convertITF(mode) {
+/* ITF14 ➔ JAN 変換 (一方通行) */
+function convertITFToJAN() {
   const val = document.getElementById('itf-input').value.trim();
   const labelEl = document.getElementById('itf-res-label');
   const valEl = document.getElementById('itf-res-val');
   const statusEl = document.getElementById('itf-check-status');
   if (!val) return;
 
-  let result = "";
-  if (mode === 'toJAN') {
-    if (/^\d{14}$/.test(val)) {
-      const janBody = val.slice(1, 13);
-      result = janBody + calcCheckDigit(janBody);
-      labelEl.textContent = "JAN (13桁)";
-    } else { alert('14桁を入力してください'); return; }
-  } else {
-    if (/^\d{13}$/.test(val)) {
-      const itfBody = '1' + val.slice(0, 12);
-      result = itfBody + calcCheckDigit(itfBody);
-      labelEl.textContent = "ITF (14桁)";
-    } else { alert('13桁を入力してください'); return; }
+  if (!/^\d{14}$/.test(val)) {
+    alert('14桁のITFケースコードを入力してください');
+    return;
   }
 
+  const janBody = val.slice(1, 13);
+  const result = janBody + calcCheckDigit(janBody);
+
+  labelEl.textContent = "解読結果 JAN(13桁)";
   valEl.textContent = result;
   const ok = isValidJan(result);
-  statusEl.textContent = ok ? "✓ 正常" : "× チェックデジット不整合";
+  statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
   statusEl.className = ok ? "text-xs text-emerald-600 font-bold" : "text-xs text-red-600 font-bold";
   document.getElementById('itf-result').classList.remove('hidden');
   try {
-    JsBarcode("#itf-res-barcode", result, { format: result.length === 14 ? "ITF14" : "EAN13", width: 2, height: 50, displayValue: true });
+    JsBarcode("#itf-res-barcode", result, { format: "EAN13", width: 2, height: 50, displayValue: true });
   } catch (e) {}
-  addHistory('ITF変換', `${val} -> ${result}`);
+  addHistory('ITF➔JAN解読', `${val} -> ${result}`);
 }
 
 function solveMissingJan() {
