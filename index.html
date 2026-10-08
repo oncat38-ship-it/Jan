@@ -38,7 +38,41 @@
 
 <style>
 .active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
-#reader video{border-radius:.75rem; object-fit: cover; filter: contrast(1.2) brightness(1.05);}
+#reader video{border-radius:.75rem; object-fit: cover;}
+
+/* バーコード認識ガイドフレーム */
+.scan-guide-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scan-guide-box {
+  width: 82%;
+  height: 140px;
+  border: 2px dashed rgba(59, 130, 246, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  position: relative;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.scan-guide-box::before, .scan-guide-box::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #3b82f6;
+  border-style: solid;
+}
+.scan-guide-box::before { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-top-left-radius: 10px; }
+.scan-guide-box::after { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 10px; }
+
+.scan-guide-box.success {
+  border-color: #10b981;
+  box-shadow: 0 0 0 9999px rgba(16, 185, 129, 0.2);
+}
 </style>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col pb-16 md:pb-0">
@@ -79,9 +113,13 @@
       </div>
       <div id="reader-container" class="relative overflow-hidden rounded-lg bg-black min-h-[300px] flex items-center justify-center">
         <div id="reader" class="w-full"></div>
-        <div id="camera-placeholder" class="text-white text-center p-6 space-y-3">
+        <!-- 最適化ガイドライン表示 -->
+        <div id="scan-guide" class="scan-guide-overlay hidden">
+          <div id="guide-box" class="scan-guide-box"></div>
+        </div>
+        <div id="camera-placeholder" class="text-white text-center p-6 space-y-3 z-10">
           <i class="fa-solid fa-barcode text-5xl text-slate-400"></i>
-          <p class="text-xs text-slate-400">JAN13 / JAN8 / ITF14 高感度自動読み取り</p>
+          <p class="text-xs text-slate-400">JAN13 / JAN8 / ITF14 自動スキャン</p>
         </div>
       </div>
       <div class="mt-3 flex gap-2">
@@ -137,7 +175,6 @@
         </button>
       </div>
 
-      <!-- 新規・編集フォーム -->
       <div id="fav-form-container" class="hidden bg-amber-50/50 p-3.5 rounded-lg border border-amber-200 space-y-3 text-sm">
         <h3 id="fav-form-title" class="font-bold text-amber-900 text-xs flex items-center gap-1"><i class="fa-solid fa-pen"></i> JAN無し商品の登録</h3>
         <input type="hidden" id="fav-input-id" value="">
@@ -176,35 +213,52 @@
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
       <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-boxes-packing text-indigo-600"></i> 単品 ⇔ 箱JAN 予測 (±1)</h2>
       <div class="space-y-2">
-        <input type="text" id="predict-input" placeholder="JANコード" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+        <input type="text" id="predict-input" placeholder="JANコード (12〜14桁)" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
         <button onclick="predictBoxJan()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-sm">計算 (±1)</button>
       </div>
     </div>
     <div id="predict-results" class="space-y-2"></div>
 
+    <!-- 商品管理・検索・修正枠 -->
     <div class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3">
-      <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2 border-b pb-2"><i class="fa-solid fa-sliders text-blue-600"></i> 登録商品の検索・修正</h3>
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2"><i class="fa-solid fa-sliders text-blue-600"></i> 登録商品の検索・手動修正・紐付け</h3>
+        <button onclick="openNewManageForm()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold px-2.5 py-1 rounded-lg">＋ 新規手動登録</button>
+      </div>
       <div class="flex gap-2">
         <input type="text" id="manage-search-input" oninput="searchManageItem()" placeholder="商品名またはJANコード" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
       </div>
       <div id="manage-result-list" class="space-y-2 pt-1"></div>
     </div>
 
+    <!-- 編集・修正フォーム -->
     <div id="manage-form-container" class="bg-white rounded-xl shadow p-4 border border-slate-200 space-y-3 hidden">
       <h3 class="font-bold text-slate-800 border-b pb-2 text-sm flex justify-between items-center">
-        <span><i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の修正</span>
+        <span><i class="fa-solid fa-pen-to-square text-blue-600"></i> 商品情報の修正・手動紐付け</span>
         <button onclick="closeManageForm()" class="text-xs text-slate-500 hover:text-slate-700">キャンセル</button>
       </h3>
       <form id="manage-product-form" onsubmit="saveManageProduct(event)" class="space-y-3 text-sm">
         <input type="hidden" id="mp-id" value="">
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
-          <input type="text" id="mp-name" required placeholder="商品名" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品JAN *</label>
-            <input type="text" id="mp-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
-          <div><label class="block text-xs font-semibold text-slate-600 mb-1">箱JAN・ITF</label>
-            <input type="text" id="mp-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono"></div>
+          <input type="text" id="mp-name" required placeholder="例: 緑茶 500ml" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-semibold text-slate-600">単品JAN *</label>
+              <button type="button" onclick="scanToField('mp-jan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> カメラ読取</button>
+            </div>
+            <input type="text" id="mp-jan" required placeholder="13桁/8桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+          </div>
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-semibold text-slate-600">箱JAN・ITF</label>
+              <button type="button" onclick="scanToField('mp-boxjan')" class="text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-camera"></i> カメラ読取</button>
+            </div>
+            <input type="text" id="mp-boxjan" placeholder="14桁" class="w-full border rounded-lg px-3 py-2 text-sm font-mono">
+          </div>
         </div>
+
         <div class="grid grid-cols-2 gap-2">
           <div><label class="block text-xs font-semibold text-slate-600 mb-1">単品価格 (円)</label>
             <input type="number" id="mp-price" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
@@ -212,8 +266,8 @@
             <input type="number" id="mp-qty" placeholder="0" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
         </div>
         <div><label class="block text-xs font-semibold text-slate-600 mb-1">メモ</label>
-          <input type="text" id="mp-memo" placeholder="メモ" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">変更を保存</button>
+          <input type="text" id="mp-memo" placeholder="棚番・メモなど" class="w-full border rounded-lg px-3 py-2 text-sm"></div>
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg transition">変更・紐付けを保存</button>
       </form>
     </div>
   </section>
@@ -264,7 +318,45 @@
 
 <!-- Modals -->
 
-<!-- 簡単箱計算モーダル -->
+<!-- 単品⇔箱の即時紐付けダイアログ -->
+<div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-link text-indigo-600"></i> 商品データの紐付け登録</h3>
+      <button onclick="closeLinkModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="space-y-3 text-sm">
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
+        <input type="text" id="link-name-input" placeholder="例: 新規登録商品" class="w-full border rounded-lg px-3 py-2 text-sm">
+      </div>
+      <div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-1 font-mono">
+        <div>単品JAN: <b id="link-jan-val" class="text-slate-800">---</b></div>
+        <div>箱JAN: <b id="link-boxjan-val" class="text-indigo-600">---</b></div>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="closeLinkModal()" class="flex-1 bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-xs">キャンセル</button>
+      <button onclick="confirmLinkSave()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 rounded-lg text-xs">紐付けて保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 簡易スキャナーダイアログ (手動入力枠からの撮影用) -->
+<div id="field-scan-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div class="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
+    <div class="flex justify-between items-center border-b pb-2">
+      <h3 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-camera text-blue-600"></i> バーコード読取</h3>
+      <button onclick="closeFieldScanModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
+    </div>
+    <div class="relative overflow-hidden rounded-lg bg-black min-h-[220px] flex items-center justify-center">
+      <div id="field-reader" class="w-full"></div>
+      <div class="scan-guide-overlay"><div class="scan-guide-box" style="width:90%; height:100px;"></div></div>
+    </div>
+    <button onclick="closeFieldScanModal()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs">キャンセル</button>
+  </div>
+</div>
+
 <div id="calc-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -343,10 +435,11 @@ function loadJson(key) {
 let currentGroupId = localStorage.getItem('jan_group_id') || null;
 let unsubscribeSnapshot = null;
 let db = { products: loadJson('jan_products'), favorites: loadJson('jan_favorites'), history: loadJson('jan_history') };
-let html5QrcodeScanner = null, isScanning = false, starting = false, torchOn = false;
+let html5QrcodeScanner = null, fieldScanner = null, isScanning = false, starting = false, torchOn = false;
 let lastScannedCode = "", lastRead = "", sameCount = 0;
 let calcMode = 'box';
 let currentBase64Image = "";
+let pendingLinkData = null, targetScanFieldId = null;
 
 if (db.products.length === 0) {
   db.products = [
@@ -492,12 +585,12 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
-/* カメラ精度・解像度・フォーカス範囲調整のスキャナー */
+/* カメラ精度・解像度・最適化ガイド */
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
-function createScanner() {
+function createScanner(elementId = "reader") {
   const F = Html5QrcodeSupportedFormats;
-  return new Html5Qrcode("reader", {
+  return new Html5Qrcode(elementId, {
     formatsToSupport: [F.EAN_13, F.EAN_8, F.ITF],          
     experimentalFeatures: { useBarCodeDetectorIfSupported: true },  
     verbose: false
@@ -511,6 +604,11 @@ function onDecoded(text) {
   if (code.length === 12) code = '0' + code;
   if (code === lastRead) sameCount++; else { lastRead = code; sameCount = 1; }
   if (sameCount < 1) return;
+  
+  // 視覚フィードバック
+  const guideBox = document.getElementById('guide-box');
+  if (guideBox) guideBox.classList.add('success');
+
   lastRead = ""; sameCount = 0;
   onScanSuccess(code);
 }
@@ -523,34 +621,35 @@ async function startCamera() {
   }
   starting = true;
   document.getElementById('camera-placeholder').classList.add('hidden');
+  document.getElementById('scan-guide').classList.remove('hidden');
   document.getElementById('scan-status').textContent = '起動中...';
   document.getElementById('scan-status').className = 'text-xs px-2 py-1 bg-amber-100 text-amber-800 rounded-full font-semibold animate-pulse';
 
-  // バーコード認識に最適な読み取り領域 (横幅88%, 縦幅45%)
   const baseConfig = {
     fps: 30,
-    qrbox: (w, h) => ({ width: Math.floor(w * 0.88), height: Math.floor(h * 0.45) }),
+    qrbox: (w, h) => ({ width: Math.floor(w * 0.85), height: Math.floor(h * 0.45) }),
     aspectRatio: 1.0
   };
   
-  // 端末依存によるカメラ起動エラーを防ぐ段階的フォールバック設定
+  const hiResConstraints = { 
+    facingMode: "environment", 
+    width: { ideal: 1920, min: 1280 }, 
+    height: { ideal: 1080, min: 720 },
+    focusMode: { ideal: "continuous" },
+    exposureMode: { ideal: "continuous" }
+  };
+
   const attempts = [
-    // 1. フルHD高画質 ＋ フォーカス連動
-    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 }, focusMode: { ideal: "continuous" } } }],
-    // 2. HD画質
-    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 }, focusMode: { ideal: "continuous" } } }],
-    // 3. 標準画質
-    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } } }],
-    // 4. 制約最小限
+    () => [{ facingMode: { exact: "environment" } }, { ...baseConfig, videoConstraints: hiResConstraints }],
+    () => [{ facingMode: "environment" }, { ...baseConfig, videoConstraints: hiResConstraints }],
     () => [{ facingMode: "environment" }, baseConfig],
-    // 5. デフォルトカメラ
     () => [true, baseConfig]
   ];
 
   let started = false;
   for (const make of attempts) {
     try {
-      html5QrcodeScanner = createScanner();
+      html5QrcodeScanner = createScanner("reader");
       const [cam, cfg] = make();
       isScanning = true;
       await html5QrcodeScanner.start(cam, cfg, onDecoded);
@@ -610,6 +709,9 @@ function stopCamera() {
 
 function resetCameraUI() {
   isScanning = false; starting = false; torchOn = false; lastRead = ""; sameCount = 0;
+  document.getElementById('scan-guide').classList.add('hidden');
+  const guideBox = document.getElementById('guide-box');
+  if (guideBox) guideBox.classList.remove('success');
   document.getElementById('cam-tools').style.display = 'none';
   document.getElementById('camera-placeholder').classList.remove('hidden');
   document.getElementById('scan-status').textContent = '待機中';
@@ -672,9 +774,17 @@ function openScanToFavModal() {
   openFavForm(null, lastScannedCode);
 }
 
-function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText = '') {
+function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText = '', originalInput = '') {
   const div = document.createElement('div');
-  div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex justify-between items-center shadow-sm";
+  div.className = "bg-white p-3.5 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:justify-between sm:items-center shadow-sm gap-2";
+  
+  // 単品・箱の相互関係に基づく即時紐付け用データの準備
+  let unitCode = code, boxCode = originalInput;
+  if (label.includes('＋1') || label.includes('箱')) {
+    unitCode = originalInput;
+    boxCode = code;
+  }
+
   div.innerHTML = `
     <div>
       <div class="flex items-center gap-1.5 mb-0.5">
@@ -683,7 +793,10 @@ function appendCodeCard(container, code, label, viewColor, viewTitle, badgeText 
       </div>
       <div class="font-mono font-black text-slate-900 text-xl tracking-wide">${esc(code)}</div>
     </div>
-    <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 border border-${viewColor}-200 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>`;
+    <div class="flex items-center gap-2">
+      ${originalInput ? `<button onclick="openLinkModal('${esc(unitCode)}', '${esc(boxCode)}')" class="bg-indigo-600 hover:bg-indigo-700 text-white px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1"><i class="fa-solid fa-link"></i> 紐付け保存</button>` : ''}
+      <button onclick="showBarcodeModal('${code}', '${esc(viewTitle)}')" class="bg-${viewColor}-50 text-${viewColor}-700 hover:bg-${viewColor}-100 border border-${viewColor}-200 px-3 py-1.5 rounded-lg text-xs font-bold">表示</button>
+    </div>`;
   container.appendChild(div);
 }
 
@@ -709,12 +822,44 @@ function predictBoxJan() {
     const newBody = body.slice(0, -1) + newLast;
     const cd = calcCheckDigit(newBody);
     const predictedCode = newBody + cd;
-    appendCodeCard(container, predictedCode, item.label, 'indigo', item.desc, item.badge);
+    appendCodeCard(container, predictedCode, item.label, 'indigo', item.desc, item.badge, input);
   });
 
   addHistory('箱JAN予測(±1)', input);
 }
 
+/* 単品⇔箱の即時紐付けモーダル機能 */
+function openLinkModal(unitJan, boxJan) {
+  pendingLinkData = { unitJan, boxJan };
+  document.getElementById('link-jan-val').textContent = unitJan;
+  document.getElementById('link-boxjan-val').textContent = boxJan;
+  document.getElementById('link-name-input').value = '';
+  document.getElementById('link-modal').classList.remove('hidden');
+}
+function closeLinkModal() {
+  document.getElementById('link-modal').classList.add('hidden');
+  pendingLinkData = null;
+}
+function confirmLinkSave() {
+  if (!pendingLinkData) return;
+  const name = document.getElementById('link-name-input').value.trim() || '紐付け商品 ' + pendingLinkData.unitJan.slice(-4);
+  const newP = {
+    id: Date.now().toString(),
+    name,
+    jan: pendingLinkData.unitJan,
+    boxJan: pendingLinkData.boxJan,
+    price: '',
+    qty: '',
+    memo: '即時紐付け保存'
+  };
+  db.products.unshift(newP);
+  saveDb();
+  closeLinkModal();
+  alert('商品情報として紐付け・保存しました。');
+  searchManageItem();
+}
+
+/* 単品⇔箱JAN予測ページ内の検索・手動修正・管理枠 */
 function searchManageItem() {
   const q = (document.getElementById('manage-search-input')?.value || '').trim().toLowerCase();
   const list = document.getElementById('manage-result-list');
@@ -738,14 +883,26 @@ function searchManageItem() {
       <div class="space-y-1">
         <div class="font-bold text-slate-800 text-sm">${esc(item.name)}</div>
         <div class="font-mono text-slate-500">JAN: <b>${esc(item.jan)}</b> ${item.boxJan ? `/ 箱: <b>${esc(item.boxJan)}</b>` : ''}</div>
-        <div class="text-slate-500">¥${esc(item.price || '-')} | 入数: ${esc(item.qty || '-')}</div>
+        <div class="text-slate-500">¥${esc(item.price || '-')} | 入数: ${esc(item.qty || '-')} ${item.memo ? `| ${esc(item.memo)}` : ''}</div>
       </div>
       <div class="flex gap-1.5">
-        <button onclick="editManageProduct('${esc(item.id)}')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-2.5 py-1.5 rounded font-bold">編集</button>
+        <button onclick="editManageProduct('${esc(item.id)}')" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-2.5 py-1.5 rounded font-bold">修正・紐付け</button>
         <button onclick="deleteManageProduct('${esc(item.id)}')" class="bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1.5 rounded"><i class="fa-solid fa-trash"></i></button>
       </div>`;
     list.appendChild(div);
   });
+}
+
+function openNewManageForm() {
+  document.getElementById('mp-id').value = '';
+  document.getElementById('mp-name').value = '';
+  document.getElementById('mp-jan').value = '';
+  document.getElementById('mp-boxjan').value = '';
+  document.getElementById('mp-price').value = '';
+  document.getElementById('mp-qty').value = '';
+  document.getElementById('mp-memo').value = '';
+  document.getElementById('manage-form-container').classList.remove('hidden');
+  document.getElementById('manage-form-container').scrollIntoView({ behavior: 'smooth' });
 }
 
 function editManageProduct(id) {
@@ -786,10 +943,41 @@ function saveManageProduct(e) {
     memo: document.getElementById('mp-memo').value
   };
   const idx = db.products.findIndex(p => p.id === id);
-  if (idx !== -1) db.products[idx] = newP;
+  if (idx !== -1) {
+    db.products[idx] = newP;
+  } else {
+    db.products.unshift(newP);
+  }
   saveDb();
   closeManageForm();
   searchManageItem();
+}
+
+/* 修正フォーム指定項目へのカメラ読み取り入力機能 */
+function scanToField(fieldId) {
+  targetScanFieldId = fieldId;
+  document.getElementById('field-scan-modal').classList.remove('hidden');
+  fieldScanner = createScanner("field-reader");
+  fieldScanner.start({ facingMode: "environment" }, { fps: 20, qrbox: { width: 220, height: 90 } }, (text) => {
+    let code = String(text).trim();
+    if (/^\d+$/.test(code) && isValidJan(code)) {
+      playBeep();
+      document.getElementById(targetScanFieldId).value = code;
+      closeFieldScanModal();
+    }
+  }).catch(e => {
+    alert("カメラが読み込めませんでした");
+    closeFieldScanModal();
+  });
+}
+
+function closeFieldScanModal() {
+  if (fieldScanner) {
+    fieldScanner.stop().then(() => fieldScanner.clear()).catch(() => {});
+    fieldScanner = null;
+  }
+  document.getElementById('field-scan-modal').classList.add('hidden');
+  targetScanFieldId = null;
 }
 
 function convertITF(mode) {
@@ -854,13 +1042,12 @@ function solveMissingJan() {
   addHistory('欠損補完', raw);
 }
 
-/* JAN無し機能（名前選択欄の初期値を空白に固定） */
+/* JAN無し機能 */
 function openFavForm(id = null, presetJan = '') {
   const form = document.getElementById('fav-form-container');
   form.classList.remove('hidden');
 
   if (id) {
-    // 編集モード
     const item = db.favorites.find(f => f.id === id);
     if (!item) return;
     document.getElementById('fav-form-title').innerHTML = '<i class="fa-solid fa-pen"></i> JAN無し商品の編集';
@@ -875,10 +1062,9 @@ function openFavForm(id = null, presetJan = '') {
       clearFavImage();
     }
   } else {
-    // 新規追加モード（カメラ引き継ぎ時でも名前欄は空白を初期値にする）
     document.getElementById('fav-form-title').innerHTML = '<i class="fa-solid fa-plus"></i> JAN無し商品の登録';
     document.getElementById('fav-input-id').value = '';
-    document.getElementById('fav-input-name').value = ''; 
+    document.getElementById('fav-input-name').value = presetJan ? `商品 (${presetJan})` : '';
     document.getElementById('fav-input-jan').value = presetJan;
     clearFavImage();
   }
