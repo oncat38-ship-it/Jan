@@ -1,0 +1,1984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JAN Master Pro v2.0</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Quagga2 (Barcode Scanner) -->
+    <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+    <!-- JsBarcode (Barcode Generator) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <!-- Firebase JS SDK (v9 compat mode) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        #interactive.viewport {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #interactive.viewport video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #interactive.viewport canvas.drawingBuffer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .tab-active {
+            border-bottom: 3px solid #3B82F6;
+            color: #3B82F6;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 pb-20">
+
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-3 shadow-md sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-barcode text-2xl"></i>
+                <h1 class="text-xl font-bold tracking-wide">JAN Master Pro</h1>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button onclick="openCalcModal()" class="text-xs bg-amber-500 hover:bg-amber-600 text-white font-bold px-2.5 py-1 rounded shadow flex items-center gap-1">
+                    <i class="fa-solid fa-calculator"></i> 試算
+                </button>
+                <span id="syncStatus" class="text-xs bg-blue-700 px-2 py-1 rounded-full flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400 inline-block"></span> オフライン
+                </span>
+                <button id="syncActionButton" onclick="handleSyncButton()" class="text-xs bg-white text-blue-600 font-bold px-2 py-1 rounded hover:bg-blue-50">
+                    <i class="fa-solid fa-right-to-bracket"></i> ログイン
+                </button>
+            </div>
+        </div>
+        <div class="absolute left-2 top-11 text-[10px] bg-black/30 text-white/80 px-1.5 py-0.5 rounded backdrop-blur-sm pointer-events-none">
+            V2.0
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-4xl mx-auto p-2 sm:p-4">
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-gray-300 bg-white rounded-t-lg shadow-sm mb-4 overflow-x-auto text-sm">
+            <button onclick="switchTab('scan')" id="tab-scan" class="flex-1 py-3 px-3 text-center whitespace-nowrap tab-active">
+                <i class="fa-solid fa-camera mr-1"></i> スキャン
+            </button>
+            <button onclick="switchTab('nojan')" id="tab-nojan" class="flex-1 py-3 px-3 text-center whitespace-nowrap text-gray-600">
+                <i class="fa-solid fa-tag mr-1"></i> JAN無し商品
+            </button>
+<button onclick="switchTab('db')" id="tab-db" class="flex-1 py-3 px-3 text-center whitespace-nowrap text-gray-600">
+                <i class="fa-solid fa-database mr-1"></i> 単品・箱DB
+            </button>
+            <button onclick="switchTab('emergency')" id="tab-emergency" class="flex-1 py-3 px-3 text-center whitespace-nowrap text-gray-600">
+                <i class="fa-solid fa-ticket mr-1"></i> 緊急時コード
+            </button>
+        </div>
+
+        <!-- 1. SCAN TAB -->
+        <div id="section-scan" class="space-y-4">
+            <!-- Camera / Input View -->
+            <div class="bg-white p-4 rounded-lg shadow space-y-3">
+                <div class="relative w-full h-56 bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                    <div id="interactive" class="viewport"></div>
+                    <div id="cameraPlaceholder" class="absolute text-white text-center">
+                        <i class="fa-solid fa-camera text-4xl mb-2 opacity-50"></i>
+                        <p class="text-sm" id="cameraStatusText">カメラ起動中または停止中</p>
+                    </div>
+                    <!-- Target Overlay -->
+                    <div class="absolute inset-0 border-2 border-dashed border-red-500/50 pointer-events-none m-8 rounded flex items-center justify-center">
+                        <div class="w-full h-0.5 bg-red-500 opacity-75"></div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2">
+                    <button onclick="toggleCamera()" id="btn-camera-toggle" class="flex-1 bg-blue-600 text-white py-2 rounded-md font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-video"></i> <span>カメラ開始</span>
+                    </button>
+                    <button onclick="toggleTorch()" id="btn-torch" class="bg-gray-200 text-gray-700 px-4 rounded-md font-bold hover:bg-gray-300">
+                        <i class="fa-solid fa-lightbulb"></i>
+                    </button>
+                </div>
+
+                <!-- Manual Input Area -->
+                <div class="pt-2 border-t">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-bold text-gray-500">手動入力 / かすれ復元 (JAN8, 12, 13, ITF14)</label>
+                        <button onclick="openRestorationGuideModal()" class="text-xs text-blue-600 hover:text-blue-800 underline font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-circle-question"></i> かすれ復元の使い方
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" id="manualInput" placeholder="例: 4901234567890 または 49012?4567890" class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="processManualInput()" class="bg-green-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-green-700">確定</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Scan Result Display & Quick Actions -->
+            <div id="scanResultArea" class="hidden bg-white p-4 rounded-lg shadow border-2 border-blue-500 space-y-4">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    <div class="text-center sm:text-left">
+                        <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800" id="scanTypeBadge">JAN-13</span>
+                        <h2 class="text-2xl font-extrabold tracking-wider text-gray-900 mt-1 font-mono" id="scannedCode">4901234567890</h2>
+                    </div>
+                    <div class="w-full sm:w-auto flex justify-center bg-white p-2 rounded border border-gray-200">
+                        <svg id="barcodePreview" class="h-16 max-w-full"></svg>
+                    </div>
+                </div>
+
+                <div id="linkedDbQuickResult" class="hidden"></div>
+
+                <div class="pt-2 border-t">
+                    <p class="text-xs font-bold text-gray-500 mb-1.5">即時操作・計算</p>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button onclick="toggleActionPanel('calc')" id="btn-act-calc" class="bg-blue-50 border border-blue-200 text-blue-700 py-1.5 px-1 rounded text-xs font-bold hover:bg-blue-100 transition flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-calculator"></i> 箱↔単品予測
+                        </button>
+                        <button onclick="toggleActionPanel('itf')" id="btn-act-itf" class="bg-purple-50 border border-purple-200 text-purple-700 py-1.5 px-1 rounded text-xs font-bold hover:bg-purple-100 transition flex items-center justify-center gap-1">
+                            <i class="fa-solid fa-boxes-packing"></i> ITF14抽出
+                        </button>
+</div>
+                </div>
+
+                <div id="actionSubPanel" class="hidden p-3 bg-gray-50 rounded border border-gray-200 text-sm">
+                    <div id="panel-calc" class="action-panel-content hidden space-y-2">
+                        <p class="font-bold text-gray-700 text-xs"><i class="fa-solid fa-calculator text-blue-600"></i> ±1 予測候補</p>
+                        <div class="rounded border border-amber-300 bg-amber-50 p-2 text-[11px] leading-relaxed text-amber-900">⚠️ <strong>予測結果は確定情報ではありません。</strong> 箱JAN・単品JANとして正しいとは限らないため、適用する前に商品名・金額・入数などに不自然な点がないか、必ず十分に確認してください。</div>
+                        <div id="calcPredictionResults" class="space-y-1 text-xs"></div>
+                    </div>
+                    <div id="panel-itf" class="action-panel-content hidden space-y-2">
+                        <p class="font-bold text-gray-700 text-xs"><i class="fa-solid fa-boxes-packing text-purple-600"></i> ITF14 ➔ JAN13 抽出・変換結果</p>
+                        <div id="itfExtractedResult" class="text-xs"></div>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t space-y-2">
+                    <p class="text-xs font-bold text-gray-700">データベースへ追加/紐付け</p>
+                    <input type="text" id="saveName" placeholder="商品名" class="w-full border rounded px-2 py-1.5 text-sm">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="text" id="saveSingleJan" placeholder="単品JAN" class="border rounded px-2 py-1.5 text-sm font-mono">
+                        <input type="text" id="saveBoxJan" placeholder="箱JAN" class="border rounded px-2 py-1.5 text-sm font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] text-gray-500 mb-0.5">商品写真（任意）</label>
+                        <input type="file" id="saveImageInput" accept="image/*" capture="environment" class="w-full text-xs border rounded p-1">
+                    </div>
+                    <button onclick="saveScannedToDB()" class="w-full bg-blue-600 text-white font-bold py-2 rounded text-sm hover:bg-blue-700 shadow">商品データ登録</button>
+                </div>
+            </div>
+
+            <!-- Wildcard Restoration Results Area -->
+            <div id="restorationArea" class="hidden bg-white p-4 rounded-lg shadow space-y-2">
+                <h3 class="font-bold text-sm text-gray-700"><i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> かすれ復元候補 (チェックデジット整合)</h3>
+                <div id="restorationList" class="max-h-40 overflow-y-auto divide-y divide-gray-100 text-sm"></div>
+            </div>
+
+            <!-- Recent Scans History -->
+            <div class="bg-white p-4 rounded-lg shadow space-y-2">
+                <h3 class="font-bold text-sm text-gray-700">最近のスキャン履歴</h3>
+                <div id="scanHistoryList" class="text-xs divide-y divide-gray-100 max-h-32 overflow-y-auto">
+                    <p class="text-gray-400 py-1">履歴はありません</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. NO-JAN TAB -->
+        <div id="section-nojan" class="hidden space-y-4">
+            <div class="bg-white p-4 rounded-lg shadow space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-sm text-gray-700">JAN無し商品登録（特売・惣菜など）</h3>
+                    <button onclick="openNoJanModal()" class="bg-green-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-green-700 shadow">+ 新規作成</button>
+                </div>
+                <div class="space-y-2">
+                    <div class="flex gap-2">
+                        <input type="search" id="noJanSearchInput" oninput="renderNoJan()" onkeydown="if(event.key==='Enter'){recordNoJanSearch();}" placeholder="登録済み商品を名前・コードで検索..." class="flex-1 min-w-0 border rounded px-3 py-2 text-sm">
+                        <button onclick="recordNoJanSearch()" class="bg-blue-600 text-white px-3 py-2 rounded text-xs font-bold">検索</button>
+                    </div>
+                    <div id="noJanSearchHistory" class="hidden space-y-1">
+                        <p class="text-[11px] font-bold text-gray-500">よく検索する項目（上位5件）</p>
+                        <div id="noJanSearchHistoryItems" class="flex flex-wrap gap-1"></div>
+                    </div>
+                </div>
+                <div id="noJanGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+            </div>
+        </div>
+        <!-- DB TAB (単品・箱DB) -->
+        <div id="section-db" class="hidden space-y-4">
+            <div class="bg-white p-4 rounded-lg shadow space-y-3">
+                <div class="flex gap-2">
+                    <input type="search" id="dbSearchInput" oninput="filterDB()" onkeydown="if(event.key==='Enter'){recordDBSearch();}" placeholder="商品名・JANで検索..." class="flex-1 min-w-0 border rounded px-3 py-2 text-sm">
+                    <button onclick="recordDBSearch()" class="bg-indigo-600 text-white px-3 py-2 rounded font-bold text-xs hover:bg-indigo-700">検索</button>
+                    <button onclick="openEditDBModal()" class="bg-blue-600 text-white px-3 py-2 rounded font-bold text-xs hover:bg-blue-700">+ 新規</button>
+                </div>
+                <div id="dbSearchHistory" class="hidden space-y-1">
+                    <p class="text-[11px] font-bold text-gray-500">よく検索する項目（上位5件）</p>
+                    <div id="dbSearchHistoryItems" class="flex flex-wrap gap-1"></div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="p-2">写真</th>
+                                <th class="p-2">商品名</th>
+                                <th class="p-2">単品JAN</th>
+                                <th class="p-2">箱JAN</th>
+                                <th class="p-2 text-center">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dbTableBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 緊急時コード TAB -->
+        <div id="section-emergency" class="hidden space-y-4">
+            <div class="bg-white p-4 rounded-lg shadow space-y-3">
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <h3 class="font-bold text-sm text-gray-700">緊急時コード・クーポン管理</h3>
+                        <p class="text-[11px] text-gray-500 mt-1">期間限定クーポンなど、長いコードも登録できます。</p>
+                    </div>
+                    <button onclick="openEmergencyModal()" class="shrink-0 bg-green-600 text-white px-3 py-2 rounded text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>コード追加</button>
+                </div>
+                <div class="flex gap-2">
+                    <input type="text" id="emergencySearchInput" oninput="renderEmergencyCodes()" placeholder="クーポン名・コードで検索..." class="flex-1 min-w-0 border rounded px-3 py-2 text-sm">
+                    <button onclick="openEmergencyHeadingModal()" class="bg-indigo-600 text-white px-3 py-2 rounded text-xs font-bold">見出し追加</button>
+                </div>
+                <div id="emergencyCodeList" class="space-y-3"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modals -->
+
+    <!-- かすれ復元 注意書きモーダル -->
+    <div id="restorationGuideModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-3 shadow-xl text-xs">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> かすれ復元機能の使い方
+                </h3>
+                <button onclick="closeRestorationGuideModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+            <div class="space-y-2.5 text-gray-700 leading-relaxed">
+                <p>バーコードが掠れて読めない場合、判別不能な数字部分に<span class="font-bold text-blue-600">「?」</span>または<span class="font-bold text-blue-600">「*」</span>を入力して確定を押すと、整合するJANコードを自動計算・復元します。</p>
+                <div class="bg-amber-50 p-2 rounded border border-amber-200 space-y-1">
+                    <p class="font-bold text-amber-800">⚠️ ご利用時の注意事項</p>
+                    <ul class="list-disc list-inside space-y-1 text-gray-700">
+                        <li>かすれている部分（判別不能な数字）に <code class="bg-amber-100 px-1 rounded font-bold">?</code> を入力してください。（例: <code class="bg-gray-100 px-1">49012?4567890</code>）</li>
+                        <li>欠けている箇所が複数ある場合は、復元候補から表示された<span class="font-bold">商品情報（名前等）と一致しているか必ずご確認ください</span>。</li>
+                        <li><span class="font-bold text-red-600">3箇所以上の欠け（???）がある場合</span>は、候補が膨大になり正しく復元できないため使用できません。1〜2箇所の欠けでご利用ください。</li>
+                    </ul>
+                </div>
+            </div>
+            <button onclick="closeRestorationGuideModal()" class="w-full bg-blue-600 text-white py-2 rounded text-xs font-bold hover:bg-blue-700">閉じる</button>
+        </div>
+    </div>
+
+    <!-- Header Quick Calc Modal -->
+    <div id="calcModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-4 shadow-xl">
+            <div class="flex justify-between items-center border-b pb-2">
+                <h3 class="font-bold text-base text-gray-800"><i class="fa-solid fa-calculator text-amber-500 mr-1"></i> 簡易試算ツール</h3>
+                <button onclick="closeCalcModal()" class="text-gray-400 hover:text-gray-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="flex bg-gray-100 p-1 rounded-lg text-xs font-bold">
+                <button id="calcModeSingleToBox" onclick="setCalcMode('singleToBox')" class="flex-1 py-1.5 rounded bg-white shadow text-blue-600 transition">
+                    単品 → 箱価格
+                </button>
+                <button id="calcModeBoxToSingle" onclick="setCalcMode('boxToSingle')" class="flex-1 py-1.5 rounded text-gray-600 transition">
+                    箱 → 単品価格
+                </button>
+            </div>
+            <div class="space-y-3 text-xs">
+                <div id="calcInputArea" class="space-y-2"></div>
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded text-center">
+                    <p class="text-gray-500 text-[11px]" id="calcResultLabel">箱の想定合計価格</p>
+                    <p class="text-2xl font-extrabold text-amber-700 mt-0.5" id="calcResultValue">0 円</p>
+                </div>
+            </div>
+            <button onclick="closeCalcModal()" class="w-full bg-gray-200 text-gray-800 py-2 rounded text-xs font-bold">閉じる</button>
+        </div>
+    </div>
+
+    <!-- Sync Modal -->
+    <div id="syncModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-3">
+            <h3 class="font-bold text-base">クラウド同期にログイン</h3>
+            <p class="text-xs text-gray-600">同じグループIDを使う端末同士で、商品DB・JAN無し商品・緊急時コードをリアルタイム同期します。ログイン中の変更や削除は、ほかのログイン中端末にも反映されます。</p>
+            <label class="block text-xs font-bold text-gray-600">同期グループID</label>
+            <input type="text" id="syncGroupId" placeholder="例: my-store-123" class="w-full border rounded px-3 py-2 text-sm">
+            <details class="border rounded p-3 space-y-2">
+                <summary class="text-sm font-bold cursor-pointer">Firebase接続設定（初回のみ）</summary>
+                <p class="text-[11px] text-gray-600">ログインには、ご自身のFirebaseプロジェクトのWebアプリ設定が必要です。Firebase Consoleの「プロジェクトの設定」→「全般」→「マイアプリ」から確認できます。</p>
+                <label class="block text-xs text-gray-600">apiKey</label>
+                <input type="text" id="syncFirebaseApiKey" autocomplete="off" placeholder="AIza..." class="w-full border rounded px-2 py-1.5 text-xs">
+                <label class="block text-xs text-gray-600">authDomain</label>
+                <input type="text" id="syncFirebaseAuthDomain" autocomplete="off" placeholder="your-project.firebaseapp.com" class="w-full border rounded px-2 py-1.5 text-xs">
+                <label class="block text-xs text-gray-600">projectId</label>
+                <input type="text" id="syncFirebaseProjectId" autocomplete="off" placeholder="your-project-id" class="w-full border rounded px-2 py-1.5 text-xs">
+                <label class="block text-xs text-gray-600">storageBucket（任意）</label>
+                <input type="text" id="syncFirebaseStorageBucket" autocomplete="off" placeholder="your-project.appspot.com" class="w-full border rounded px-2 py-1.5 text-xs">
+                <label class="block text-xs text-gray-600">appId（任意）</label>
+                <input type="text" id="syncFirebaseAppId" autocomplete="off" placeholder="1:...:web:..." class="w-full border rounded px-2 py-1.5 text-xs">
+                <p class="text-[11px] text-amber-700">このファイルに以前入っていたFirebase設定は仮の値で、実在するプロジェクトに接続できる保証がありません。実際の設定値を入力してください。</p>
+            </details>
+            <p class="text-[11px] text-amber-700">初回接続時、クラウドにデータがある分類はクラウドから読み込み、空の分類だけ端末データをクラウドへ登録します。接続前に可能ならデータをバックアップしてください。</p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeSyncModal()" class="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
+                <button onclick="saveSyncSettings()" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded font-bold">ログインして同期開始</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit DB Modal -->
+    <div id="dbModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-md w-full space-y-3">
+            <h3 class="font-bold text-base" id="dbModalTitle">商品データの追加/編集</h3>
+            <input type="hidden" id="dbEditId">
+            <div>
+                <label class="text-xs text-gray-500">商品名</label>
+                <input type="text" id="dbEditName" class="w-full border rounded px-2 py-1.5 text-sm">
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-gray-500">単品JAN</label>
+                    <input type="text" id="dbEditSingle" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">箱JAN</label>
+                    <input type="text" id="dbEditBox" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="text-xs text-gray-500">単品価格</label>
+                    <input type="number" id="dbEditPrice" class="w-full border rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500">箱入数</label>
+                    <input type="number" id="dbEditQty" class="w-full border rounded px-2 py-1.5 text-sm">
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">商品写真</label>
+                <input type="file" id="dbEditImageInput" accept="image/*" class="w-full text-xs border rounded p-1">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeDbModal()" class="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
+                <button onclick="saveDbItem()" class="px-4 py-1.5 text-xs bg-blue-600 text-white rounded font-bold">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- No-JAN Modal -->
+    <div id="noJanModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-3">
+            <h3 class="font-bold text-base" id="noJanModalTitle">JAN無し商品登録</h3>
+            <input type="hidden" id="noJanEditId">
+            <div>
+                <label class="text-xs text-gray-500">商品名</label>
+                <input type="text" id="noJanName" class="w-full border rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">インストアJANコード (空欄時は自動生成)</label>
+                <input type="text" id="noJanCodeInput" placeholder="例: 2012345678901" class="w-full border rounded px-2 py-1.5 text-sm font-mono">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">商品写真</label>
+                <input type="file" id="noJanImageInput" accept="image/*" capture="environment" class="w-full text-xs">
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeNoJanModal()" class="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
+                <button onclick="saveNoJanItem()" class="px-4 py-1.5 text-xs bg-green-600 text-white rounded font-bold">登録/保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emergency Code Modal -->
+    <div id="emergencyModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-3 my-6">
+            <h3 id="emergencyModalTitle" class="font-bold text-base">緊急時コード登録</h3>
+            <input type="hidden" id="emergencyEditId">
+            <label class="block text-xs text-gray-500">見出し
+                <select id="emergencyHeadingSelect" class="mt-1 w-full border rounded px-2 py-2 text-sm"></select>
+            </label>
+            <label class="block text-xs text-gray-500">期間（例：10/1〜10/15）
+                <input type="text" id="emergencyPeriod" placeholder="期間" class="mt-1 w-full border rounded px-2 py-2 text-sm">
+            </label>
+            <label class="block text-xs text-gray-500">クーポン名
+                <input type="text" id="emergencyName" placeholder="クーポン名" class="mt-1 w-full border rounded px-2 py-2 text-sm">
+            </label>
+            <label class="block text-xs text-gray-500">コード（桁数制限なし）
+                <input type="text" id="emergencyCode" placeholder="数字・英数字のコード" inputmode="numeric" class="mt-1 w-full border rounded px-2 py-2 text-sm font-mono">
+            </label>
+            <div class="flex gap-2">
+                <button onclick="useScannedCodeForEmergency()" class="flex-1 bg-blue-50 text-blue-700 border border-blue-200 px-2 py-2 rounded text-xs font-bold">直近の読取コードをセット</button>
+                <button onclick="scanEmergencyCodeFromCameraPage()" class="flex-1 bg-gray-100 text-gray-700 px-2 py-2 rounded text-xs font-bold">スキャン画面へ</button>
+            </div>
+            <p class="text-[10px] text-gray-500">カメラで読めるバーコードは、スキャン画面で読み取ってから「直近の読取コードをセット」を押してください。文字のOCR読み取りは未対応です。</p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeEmergencyModal()" class="px-3 py-1.5 text-xs text-gray-600">キャンセル</button>
+                <button onclick="saveEmergencyCode()" class="px-4 py-1.5 text-xs bg-green-600 text-white rounded font-bold">保存</button>
+            </div>
+        </div>
+    </div>
+    <div id="emergencyHeadingModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg p-5 max-w-sm w-full space-y-3">
+            <h3 class="font-bold text-base">クーポン見出しの追加</h3>
+            <input type="text" id="emergencyHeadingName" placeholder="例：今週限定 / レジ応援用" class="w-full border rounded px-3 py-2 text-sm">
+            <div class="flex justify-end gap-2"><button onclick="closeEmergencyHeadingModal()" class="px-3 py-1.5 text-xs text-gray-600">キャンセル</button><button onclick="saveEmergencyHeading()" class="px-4 py-1.5 text-xs bg-indigo-600 text-white rounded font-bold">追加</button></div>
+        </div>
+    </div>
+
+    <!-- Barcode Display Modal -->
+    <div id="barcodeModal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onclick="closeBarcodeModal()">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full text-center space-y-4" onclick="event.stopPropagation()">
+            <h3 id="barcodeModalTitle" class="font-bold text-lg text-gray-800"></h3>
+            <div class="flex justify-center bg-gray-50 p-3 rounded border">
+                <svg id="barcodeModalSvg" class="max-w-full"></svg>
+            </div>
+            <p id="barcodeModalCode" class="text-xl font-mono tracking-widest text-gray-800 font-bold"></p>
+            <button onclick="closeBarcodeModal()" class="w-full bg-gray-200 py-2 rounded text-sm font-bold hover:bg-gray-300">閉じる</button>
+        </div>
+    </div>
+
+    <!-- Application Script Logic -->
+    <script>
+        let itemsDB = JSON.parse(localStorage.getItem('jan_master_db') || '[]');
+        let noJanItems = JSON.parse(localStorage.getItem('jan_master_nojan') || '[]');
+        let emergencyCodes = JSON.parse(localStorage.getItem('jan_master_emergency') || '[]');
+        let emergencyHeadings = JSON.parse(localStorage.getItem('jan_master_emergency_headings') || '["共通"]');
+        let emergencyCollapsedHeadings = JSON.parse(localStorage.getItem('jan_master_emergency_collapsed') || '{}');
+        let noJanSearchHistory = JSON.parse(localStorage.getItem('jan_master_nojan_search_history') || '[]');
+        let dbSearchHistory = JSON.parse(localStorage.getItem('jan_master_db_search_history') || '[]');
+        let scanHistory = JSON.parse(localStorage.getItem('jan_master_history') || '[]');
+        let isCameraRunning = false;
+        let activeTab = 'scan';
+        let currentScannedCode = '';
+        let emergencyScanMode = false;
+        let currentActivePanel = null;
+        let calcMode = 'singleToBox';
+
+        let db = null;
+        let syncGroupId = localStorage.getItem('jan_master_sync_id') || '';
+        let isSyncConnected = false;
+        let syncUnsubscribers = [];
+        let syncQueues = {};
+        let syncKnownData = {};
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderDB();
+            renderNoJan();
+            renderNoJanSearchHistory();
+            renderDBSearchHistory();
+            renderEmergencyCodes();
+            renderHistory();
+            setupClearButtons();
+            renderCalcInputs();
+            const rememberedLogin = localStorage.getItem('jan_master_sync_logged_in');
+            // 旧版でグループIDを保存していた場合は、従来どおり初回だけ自動接続を引き継ぐ
+            const savedFirebaseConfig = JSON.parse(localStorage.getItem('jan_master_firebase_config') || '{}');
+            if (syncGroupId && rememberedLogin !== 'false' && savedFirebaseConfig.apiKey && savedFirebaseConfig.authDomain && savedFirebaseConfig.projectId && !savedFirebaseConfig.apiKey.includes('DemoConfigKey')) {
+                localStorage.setItem('jan_master_sync_logged_in', 'true');
+                initFirebase().catch(err => showSyncError(err));
+            } else {
+                localStorage.setItem('jan_master_sync_logged_in', 'false');
+                updateSyncStatus(false);
+            }
+        });
+
+        function switchTab(tab) {
+            activeTab = tab;
+            ['scan', 'nojan', 'db', 'emergency'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('tab-active');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-600');
+            });
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('tab-active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-600');
+
+            if (tab !== 'scan' && isCameraRunning) {
+                stopCamera();
+            }
+        }
+
+        // --- Camera Logic (Quagga2 robust startup + improved barcode stability) ---
+        let isStartingCamera = false;
+        let lastDetectedCandidate = '';
+        let lastDetectedCount = 0;
+        let lastDetectedAt = 0;
+        let cameraTrack = null;
+
+        function setCameraStatus(message) {
+            const el = document.getElementById('cameraStatusText');
+            if (el) el.textContent = message;
+        }
+
+        function setCameraButton(running) {
+            const btn = document.getElementById('btn-camera-toggle');
+            if (!btn) return;
+            btn.classList.toggle('bg-red-600', running);
+            btn.classList.toggle('bg-blue-600', !running);
+            const span = btn.querySelector('span');
+            if (span) span.textContent = running ? 'カメラ停止' : 'カメラ開始';
+        }
+
+        function toggleCamera() {
+            if (isCameraRunning || isStartingCamera) stopCamera();
+            else startCamera();
+        }
+
+        async function startCamera() {
+            if (isStartingCamera || isCameraRunning) return;
+            isStartingCamera = true;
+            setCameraStatus('カメラを準備しています…');
+
+            if (!window.isSecureContext || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                isStartingCamera = false;
+                setCameraStatus('HTTPSで開いてください（GitHub Pagesは対応）');
+                alert('カメラを使うにはHTTPS接続が必要です。GitHub PagesなどのHTTPS環境で開いてください。');
+                return;
+            }
+            if (typeof window.Quagga === 'undefined' || typeof Quagga.init !== 'function') {
+                isStartingCamera = false;
+                setCameraStatus('認識ライブラリを読み込めません');
+                alert('バーコード認識ライブラリを読み込めませんでした。通信状態を確認してページを再読み込みしてください。');
+                return;
+            }
+
+            // 前回のストリーム・イベントを安全に解放
+            stopCamera();
+            isStartingCamera = true;
+            const targetElem = document.querySelector('#interactive');
+            targetElem.innerHTML = '';
+
+            // 先にブラウザ標準APIでカメラ権限・端末のカメラ利用可否を確認
+            let probeStream = null;
+            try {
+                probeStream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                probeStream.getTracks().forEach(track => track.stop());
+                probeStream = null;
+            } catch (err) {
+                if (probeStream) probeStream.getTracks().forEach(track => track.stop());
+                isStartingCamera = false;
+                let message = 'カメラを利用できません。';
+                if (err && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')) {
+                    message = 'カメラ権限が拒否されています。ブラウザ設定でカメラを許可してください。';
+                } else if (err && (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')) {
+                    message = '利用できるカメラが見つかりません。';
+                } else if (err && (err.name === 'NotReadableError' || err.name === 'TrackStartError')) {
+                    message = 'カメラが他のアプリで使用中の可能性があります。他のアプリを閉じて再試行してください。';
+                } else if (err && err.name === 'OverconstrainedError') {
+                    message = 'カメラが指定条件に対応していません。別のブラウザでお試しください。';
+                }
+                setCameraStatus(message);
+                alert(message + (err && err.message ? '\n詳細: ' + err.message : ''));
+                return;
+            }
+
+            // Quagga2が端末に合うカメラ設定を選べるよう、解像度は理想値で指定
+            try {
+                Quagga.offDetected(onBarcodeScanned);
+                Quagga.init({
+                    inputStream: {
+                        name: 'Live',
+                        type: 'LiveStream',
+                        target: targetElem,
+                        constraints: {
+                            facingMode: { ideal: 'environment' },
+                            width: { min: 640, ideal: 1920 },
+                            height: { min: 480, ideal: 1080 },
+                            aspectRatio: { ideal: 1.7777778 }
+                        },
+                        area: { top: '15%', right: '5%', left: '5%', bottom: '15%' }
+                    },
+                    locator: {
+                        patchSize: 'medium',
+                        halfSample: false
+                    },
+                    frequency: 10,
+                    numOfWorkers: 0,
+                    decoder: {
+                        readers: ['ean_reader', 'ean_8_reader', 'upc_reader', 'upc_e_reader', 'i2of5_reader', 'code_128_reader']
+                    },
+                    locate: true
+                }, function(err) {
+                    if (err) {
+                        console.error('Quagga initialization error:', err);
+                        isStartingCamera = false;
+                        isCameraRunning = false;
+                        try { Quagga.stop(); } catch (_) {}
+                        targetElem.innerHTML = '';
+                        setCameraButton(false);
+                        setCameraStatus('カメラを初期化できませんでした。再試行してください。');
+                        let detail = err.message || String(err);
+                        alert('バーコード認識エンジンを起動できませんでした。\nカメラ権限を許可し、HTTPSで開いていることを確認してください。\n詳細: ' + detail);
+                        return;
+                    }
+
+                    try {
+                        Quagga.start();
+                        isCameraRunning = true;
+                        isStartingCamera = false;
+                        document.getElementById('cameraPlaceholder').classList.add('hidden');
+                        setCameraButton(true);
+                        setCameraStatus('バーコードを枠内に合わせてください');
+                        const video = targetElem.querySelector('video');
+                        if (video) {
+                            video.setAttribute('playsinline', 'true');
+                            video.setAttribute('autoplay', 'true');
+                            video.muted = true;
+                            const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+                            cameraTrack = track || null;
+                            // 対応端末では連続オートフォーカスを試行（非対応時は無視）
+                            if (track && track.applyConstraints) {
+                                const caps = track.getCapabilities ? track.getCapabilities() : {};
+                                const advanced = [];
+                                if (caps.focusMode && caps.focusMode.includes('continuous')) advanced.push({ focusMode: 'continuous' });
+                                if (caps.zoom && caps.zoom.min !== undefined) advanced.push({ zoom: Math.min(caps.zoom.max || 1, Math.max(caps.zoom.min || 1, 1.5)) });
+                                if (advanced.length) track.applyConstraints({ advanced }).catch(() => {});
+                            }
+                        }
+                    } catch (startErr) {
+                        console.error('Quagga start error:', startErr);
+                        isStartingCamera = false;
+                        isCameraRunning = false;
+                        setCameraButton(false);
+                        setCameraStatus('カメラの開始に失敗しました');
+                        alert('カメラの開始に失敗しました。ページを再読み込みして再試行してください。');
+                    }
+                });
+                Quagga.offDetected(onBarcodeScanned);
+                Quagga.onDetected(onBarcodeScanned);
+            } catch (err) {
+                console.error('Camera setup error:', err);
+                isStartingCamera = false;
+                setCameraStatus('カメラ設定でエラーが発生しました');
+                alert('カメラ設定でエラーが発生しました: ' + (err.message || err));
+            }
+        }
+
+        function stopCamera() {
+            isStartingCamera = false;
+            try {
+                if (typeof window.Quagga !== 'undefined') {
+                    Quagga.offDetected(onBarcodeScanned);
+                    Quagga.stop();
+                    const activeTrack = Quagga.CameraAccess && Quagga.CameraAccess.getActiveTrack
+                        ? Quagga.CameraAccess.getActiveTrack() : null;
+                    if (activeTrack) activeTrack.stop();
+                }
+            } catch (e) {
+                console.debug('Camera cleanup:', e);
+            }
+            if (cameraTrack) {
+                try { cameraTrack.stop(); } catch (_) {}
+                cameraTrack = null;
+            }
+            isCameraRunning = false;
+            const placeholder = document.getElementById('cameraPlaceholder');
+            if (placeholder) placeholder.classList.remove('hidden');
+            setCameraButton(false);
+            if (document.getElementById('cameraStatusText')) setCameraStatus('カメラ停止中');
+        }
+
+        async function toggleTorch() {
+            if (!isCameraRunning || !cameraTrack) {
+                alert('先にカメラを開始してください。');
+                return;
+            }
+            try {
+                const caps = cameraTrack.getCapabilities ? cameraTrack.getCapabilities() : {};
+                if (!caps.torch) {
+                    alert('この端末・ブラウザはライト切替に対応していません。');
+                    return;
+                }
+                const settings = cameraTrack.getSettings ? cameraTrack.getSettings() : {};
+                await cameraTrack.applyConstraints({ advanced: [{ torch: !settings.torch }] });
+            } catch (err) {
+                console.warn('Torch toggle failed:', err);
+                alert('ライトを切り替えられませんでした。');
+            }
+        }
+
+        function onBarcodeScanned(result) {
+            // 読み取り確定後やカメラ停止後に届いたイベントは無視する
+            if (!isCameraRunning) return;
+
+            const code = result && result.codeResult && result.codeResult.code;
+            if (!code) return;
+            if (emergencyScanMode) {
+                if (!/^[0-9A-Za-z-]{8,64}$/.test(code)) return;
+            } else if (!validateCheckDigit(code)) {
+                return;
+            }
+
+            // 誤読対策：同じコードを短時間に複数回検出してから採用
+            const now = Date.now();
+            if (code === lastDetectedCandidate && now - lastDetectedAt < 1800) {
+                lastDetectedCount++;
+            } else {
+                lastDetectedCandidate = code;
+                lastDetectedCount = 1;
+            }
+            lastDetectedAt = now;
+            if (lastDetectedCount >= 2) {
+                // JANを確定したら先にカメラを止め、以降の操作に移れるようにする
+                lastDetectedCount = 0;
+                stopCamera();
+                if (emergencyScanMode) {
+                    emergencyScanMode = false;
+                    currentScannedCode = code;
+                    setCameraStatus('緊急時コード読み取り成功：' + code + '（カメラ停止中）');
+                    setTimeout(() => {
+                        switchTab('emergency');
+                        openEmergencyModal();
+                        document.getElementById('emergencyCode').value = code;
+                    }, 250);
+                } else {
+                    handleCodeCaptured(code);
+                    setCameraStatus('読み取り成功：' + code + '（カメラ停止中）');
+                }
+            }
+        }
+
+        function processManualInput() {
+            const val = document.getElementById('manualInput').value.trim();
+            if (!val) return;
+
+            if (val.includes('?') || val.includes('*')) {
+                restoreWildcardJAN(val);
+            } else {
+                handleCodeCaptured(val);
+            }
+        }
+
+        function handleCodeCaptured(code) {
+            currentScannedCode = code;
+            document.getElementById('scannedCode').innerText = code;
+            document.getElementById('scanResultArea').classList.remove('hidden');
+            document.getElementById('scanTypeBadge').innerText = code.length === 14 ? 'ITF-14' : (code.length === 8 ? 'JAN-8' : 'JAN-13');
+
+            try {
+                JsBarcode("#barcodePreview", code, { 
+                    format: /^\d{13}$/.test(String(code)) ? "EAN13" : /^\d{14}$/.test(String(code)) ? "ITF" : /^\d{8}$/.test(String(code)) ? "EAN8" : "CODE128", 
+                    width: 2, 
+                    height: 55, 
+                    displayValue: false 
+                });
+            } catch (e) {
+                console.log("Barcode render error", e);
+            }
+
+            document.getElementById('saveSingleJan').value = code.length <= 13 ? code : '';
+            document.getElementById('saveBoxJan').value = code.length === 14 ? code : '';
+
+            // DBに紐付け済みなら、商品名・単品JAN・箱JANを即時反映
+            applyDatabaseMatchToForm(code);
+            renderLinkedDatabaseMatch(code);
+
+            closeActionPanels();
+            addToHistory(code);
+        }
+
+        function toggleActionPanel(actionType) {
+            const subPanel = document.getElementById('actionSubPanel');
+            if (currentActivePanel === actionType && !subPanel.classList.contains('hidden')) {
+                subPanel.classList.add('hidden');
+                currentActivePanel = null;
+                return;
+            }
+
+            document.querySelectorAll('.action-panel-content').forEach(el => el.classList.add('hidden'));
+            subPanel.classList.remove('hidden');
+            currentActivePanel = actionType;
+
+            if (actionType === 'calc') {
+                document.getElementById('panel-calc').classList.remove('hidden');
+                calculatePlusMinusOneCandidates(currentScannedCode);
+            } else if (actionType === 'itf') {
+                document.getElementById('panel-itf').classList.remove('hidden');
+                processItfExtraction(currentScannedCode);
+            }
+        }
+
+        function closeActionPanels() {
+            document.getElementById('actionSubPanel').classList.add('hidden');
+            document.querySelectorAll('.action-panel-content').forEach(el => el.classList.add('hidden'));
+            currentActivePanel = null;
+        }
+
+        function calculatePlusMinusOneCandidates(code) {
+            const container = document.getElementById('calcPredictionResults');
+            container.innerHTML = '';
+
+            if (code.length !== 13) {
+                container.innerHTML = '<p class="text-gray-500">※±1 予測は13桁のJANコードのみ対応しています。</p>';
+                return;
+            }
+
+            const base12 = code.substring(0, 12);
+            const numVal = parseInt(base12, 10);
+
+            const candidates = [
+                { label: '+1 ケースJAN予測', val: createJan13FromBase((numVal + 1).toString().padStart(12, '0')), target: 'box' },
+                { label: '-1 単品JAN予測', val: createJan13FromBase((numVal - 1).toString().padStart(12, '0')), target: 'single' }
+            ];
+
+            candidates.forEach(c => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-white p-1.5 rounded border border-gray-200";
+                div.innerHTML = `
+                    <div>
+                        <span class="text-[10px] text-gray-500 block">${c.label}</span>
+                        <span class="font-mono font-bold text-gray-800">${c.val}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="showBarcodeModal('${c.label}', '${c.val}')" class="text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-2 py-1 rounded">表示</button>
+                        <button onclick="applyJanToSaveForm('${c.val}', '${c.target}')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200">適用</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function createJan13FromBase(base12) {
+            const cd = calculateCheckDigit(base12);
+            return base12 + cd;
+        }
+
+        function applyJanToSaveForm(code, target = '') {
+            if (target === 'box') { document.getElementById('saveBoxJan').value = code; return; }
+            if (target === 'single') { document.getElementById('saveSingleJan').value = code; return; }
+            if (!document.getElementById('saveSingleJan').value) {
+                document.getElementById('saveSingleJan').value = code;
+            } else {
+                document.getElementById('saveBoxJan').value = code;
+            }
+        }
+
+        function processItfExtraction(code) {
+            const container = document.getElementById('itfExtractedResult');
+            if (code.length === 14) {
+                const jan13Base = code.substring(1, 13);
+                const jan13 = createJan13FromBase(jan13Base);
+                container.innerHTML = `
+                    <p class="text-gray-600">抽出元JAN-13:</p>
+                    <p class="font-mono font-bold text-base text-purple-900 mb-1">${jan13}</p>
+                    <div class="flex gap-2">
+                        <button onclick="showBarcodeModal('抽出JAN-13', '${jan13}')" class="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded">バーコード表示</button>
+                        <button onclick="document.getElementById('saveSingleJan').value='${jan13}'" class="text-xs bg-purple-600 text-white px-2 py-1 rounded">単品JANにセット</button>
+                    </div>
+                `;
+            } else if (code.length === 13) {
+                const itf14Base = '1' + code.substring(0, 12);
+                const cd = calculateCheckDigit(itf14Base);
+                const itf14 = itf14Base + cd;
+                container.innerHTML = `
+                    <p class="text-gray-600">標準ITF-14変換 (インジケータ1):</p>
+                    <p class="font-mono font-bold text-base text-purple-900 mb-1">${itf14}</p>
+                    <div class="flex gap-2">
+                        <button onclick="showBarcodeModal('変換ITF-14', '${itf14}')" class="text-xs bg-gray-200 text-gray-800 px-2 py-1 rounded">バーコード表示</button>
+                        <button onclick="document.getElementById('saveBoxJan').value='${itf14}'" class="text-xs bg-purple-600 text-white px-2 py-1 rounded">箱JANにセット</button>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<p class="text-gray-500">※13桁JANまたは14桁ITFコードを入力してください。</p>';
+            }
+        }
+
+        function decodeITF14Manual() {
+            const val = document.getElementById('itfInput').value.trim();
+            const resArea = document.getElementById('itfResultArea');
+            if (!val) return;
+            resArea.classList.remove('hidden');
+
+            if (val.length === 14) {
+                const jan13 = createJan13FromBase(val.substring(1, 13));
+                resArea.innerHTML = `
+                    <p class="font-bold">解析結果 (ITF14 ➔ JAN13)</p>
+                    <p>インジケータ: ${val[0]}</p>
+                    <p>抽出JAN13: <span class="font-mono font-bold text-purple-900">${jan13}</span></p>
+                    <button onclick="showBarcodeModal('JAN-13', '${jan13}')" class="mt-1 bg-purple-600 text-white px-2 py-0.5 rounded text-[11px]">バーコード表示</button>
+                `;
+            } else if (val.length === 13) {
+                const itf14 = '1' + val.substring(0, 12) + calculateCheckDigit('1' + val.substring(0, 12));
+                resArea.innerHTML = `
+                    <p class="font-bold">解析結果 (JAN13 ➔ ITF14)</p>
+                    <p>生成ITF14: <span class="font-mono font-bold text-purple-900">${itf14}</span></p>
+                    <button onclick="showBarcodeModal('ITF-14', '${itf14}')" class="mt-1 bg-purple-600 text-white px-2 py-0.5 rounded text-[11px]">バーコード表示</button>
+                `;
+            } else {
+                resArea.innerHTML = '<p class="text-red-500">桁数が正しくありません（13桁または14桁）</p>';
+            }
+        }
+
+        function findDatabaseMatch(code) {
+            const value = String(code || '').trim();
+            const matches = itemsDB.filter(item => String(item.singleJan || '').trim() === value || String(item.boxJan || '').trim() === value);
+            // 同じJANの登録が複数ある場合、単品・箱の両方が埋まった登録を優先
+            return matches.sort((a, b) => Number(!!(b.singleJan && b.boxJan)) - Number(!!(a.singleJan && a.boxJan)))[0] || null;
+        }
+
+        function applyDatabaseMatchToForm(code) {
+            const item = findDatabaseMatch(code);
+            if (!item) return null;
+            document.getElementById('saveName').value = item.name || '';
+            document.getElementById('saveSingleJan').value = item.singleJan || '';
+            document.getElementById('saveBoxJan').value = item.boxJan || '';
+            return item;
+        }
+
+        function renderLinkedDatabaseMatch(code) {
+            const area = document.getElementById('linkedDbQuickResult');
+            if (!area) return;
+            const item = findDatabaseMatch(code);
+            if (!item) {
+                area.classList.add('hidden');
+                area.innerHTML = '';
+                return;
+            }
+            const esc = escapeHtml;
+            const nameArg = encodeURIComponent(item.name || '商品');
+            const singleArg = encodeURIComponent(item.singleJan || '');
+            const boxArg = encodeURIComponent(item.boxJan || '');
+            const isSingle = String(item.singleJan || '').trim() === String(code || '').trim();
+            const counterpart = isSingle ? item.boxJan : item.singleJan;
+            const counterpartLabel = isSingle ? '箱JAN' : '単品JAN';
+            area.classList.remove('hidden');
+            area.innerHTML = `<div class="p-3 rounded-lg border-2 border-green-300 bg-green-50 space-y-1">
+                <div class="flex items-center justify-between gap-2"><span class="text-[11px] font-bold bg-green-700 text-white px-2 py-0.5 rounded">登録済みDBに一致</span><span class="text-[10px] text-green-800">登録済み情報</span></div>
+                <p class="font-bold text-sm text-gray-800">${esc(item.name || '商品名未登録')}</p>
+                <p class="text-xs text-gray-600">単品JAN：<span class="font-mono font-bold">${esc(item.singleJan || '未登録')}</span></p>
+                <p class="text-xs text-gray-600">箱JAN：<span class="font-mono font-bold">${esc(item.boxJan || '未登録')}</span></p>
+                ${counterpart ? `<p class="text-xs font-bold text-green-800">読み取ったコードに対応する${counterpartLabel}を確認済みです。</p>` : `<p class="text-xs text-amber-700">対応する${counterpartLabel}はまだ登録されていません。</p>`}
+                <div class="flex flex-wrap gap-1 pt-1">
+                    ${item.singleJan ? `<button onclick="showBarcodeModal(decodeURIComponent('${nameArg}')+' (単品)',decodeURIComponent('${singleArg}'))" class="bg-white border border-green-200 px-2 py-1 rounded text-[11px] text-blue-700">単品バーコード</button>` : ''}
+                    ${item.boxJan ? `<button onclick="showBarcodeModal(decodeURIComponent('${nameArg}')+' (箱)',decodeURIComponent('${boxArg}'))" class="bg-white border border-green-200 px-2 py-1 rounded text-[11px] text-purple-700">箱バーコード</button>` : ''}
+                    <button onclick="useSearchResult(decodeURIComponent('${encodeURIComponent(item.name || '')}'),decodeURIComponent('${singleArg}'),decodeURIComponent('${boxArg}'))" class="bg-green-700 text-white px-2 py-1 rounded text-[11px]">入力欄に反映</button>
+                </div>
+            </div>`;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+
+        function useSearchResult(name, singleJan, boxJan) {
+            if (name) document.getElementById('saveName').value = name;
+            if (singleJan) document.getElementById('saveSingleJan').value = singleJan;
+            if (boxJan) document.getElementById('saveBoxJan').value = boxJan;
+        }
+
+        // --- Modals for Restoration Guide ---
+        function openRestorationGuideModal() {
+            document.getElementById('restorationGuideModal').classList.remove('hidden');
+        }
+        function closeRestorationGuideModal() {
+            document.getElementById('restorationGuideModal').classList.add('hidden');
+        }
+
+        function openCalcModal() {
+            document.getElementById('calcModal').classList.remove('hidden');
+            renderCalcInputs();
+        }
+        function closeCalcModal() {
+            document.getElementById('calcModal').classList.add('hidden');
+        }
+
+        function setCalcMode(mode) {
+            calcMode = mode;
+            const btnSingle = document.getElementById('calcModeSingleToBox');
+            const btnBox = document.getElementById('calcModeBoxToSingle');
+
+            if (mode === 'singleToBox') {
+                btnSingle.className = "flex-1 py-1.5 rounded bg-white shadow text-blue-600 transition";
+                btnBox.className = "flex-1 py-1.5 rounded text-gray-600 transition";
+            } else {
+                btnBox.className = "flex-1 py-1.5 rounded bg-white shadow text-blue-600 transition";
+                btnSingle.className = "flex-1 py-1.5 rounded text-gray-600 transition";
+            }
+            renderCalcInputs();
+        }
+
+        function renderCalcInputs() {
+            const container = document.getElementById('calcInputArea');
+            if (calcMode === 'singleToBox') {
+                document.getElementById('calcResultLabel').innerText = "箱の想定合計価格";
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-gray-500 mb-1">単品価格 (円)</label>
+                        <input type="number" id="inputUnitPrice" oninput="calculateTrial()" placeholder="例: 150" class="w-full border rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-gray-500 mb-1">箱の入数 (個)</label>
+                        <input type="number" id="inputQty" oninput="calculateTrial()" value="10" class="w-full border rounded px-3 py-2 text-sm">
+                    </div>
+                `;
+            } else {
+                document.getElementById('calcResultLabel').innerText = "1個あたりの単価価格";
+                container.innerHTML = `
+                    <div>
+                        <label class="block text-gray-500 mb-1">箱価格 (円)</label>
+                        <input type="number" id="inputBoxPrice" oninput="calculateTrial()" placeholder="例: 1500" class="w-full border rounded px-3 py-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-gray-500 mb-1">箱の入数 (個)</label>
+                        <input type="number" id="inputQty" oninput="calculateTrial()" value="10" class="w-full border rounded px-3 py-2 text-sm">
+                    </div>
+                `;
+            }
+            calculateTrial();
+        }
+
+        function calculateTrial() {
+            const qty = Number(document.getElementById('inputQty')?.value) || 1;
+            const resVal = document.getElementById('calcResultValue');
+
+            if (calcMode === 'singleToBox') {
+                const uPrice = Number(document.getElementById('inputUnitPrice')?.value) || 0;
+                const total = uPrice * qty;
+                resVal.innerText = `${total.toLocaleString()} 円`;
+            } else {
+                const bPrice = Number(document.getElementById('inputBoxPrice')?.value) || 0;
+                const single = qty > 0 ? (bPrice / qty).toFixed(1) : 0;
+                resVal.innerText = `${Number(single).toLocaleString()} 円`;
+            }
+        }
+
+        // --- Wildcard Restorer ---
+        function restoreWildcardJAN(pattern) {
+            const listContainer = document.getElementById('restorationList');
+            const area = document.getElementById('restorationArea');
+            listContainer.innerHTML = '';
+            area.classList.remove('hidden');
+
+            const wildcardCount = (pattern.match(/[\?\*]/g) || []).length;
+            if (wildcardCount >= 3) {
+                listContainer.innerHTML = '<p class="text-xs text-red-500 py-2 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> 3箇所以上の欠け(???/***)は復元候補が膨大になるため処理できません。1〜2箇所のみお使いください。</p>';
+                return;
+            }
+
+            const results = [];
+            
+            function generate(str, idx) {
+                if (results.length >= 20) return;
+                if (idx === str.length) {
+                    if (validateCheckDigit(str)) {
+                        results.push(str);
+                    }
+                    return;
+                }
+                if (str[idx] === '?' || str[idx] === '*') {
+                    for (let d = 0; d <= 9; d++) {
+                        generate(str.substring(0, idx) + d + str.substring(idx + 1), idx + 1);
+                    }
+                } else {
+                    generate(str, idx + 1);
+                }
+            }
+
+            generate(pattern, 0);
+
+            if (results.length === 0) {
+                listContainer.innerHTML = '<p class="text-xs text-gray-500 py-2">該当する整合JANは見つかりませんでした。</p>';
+            } else {
+                results.forEach(code => {
+                    const div = document.createElement('div');
+                    div.className = "flex justify-between items-center py-1.5";
+                    div.innerHTML = `
+                        <span class="font-mono font-bold text-gray-800">${code}</span>
+                        <div class="flex gap-1">
+                            <button onclick="showBarcodeModal('復元JAN', '${code}')" class="text-xs bg-gray-100 px-2 py-0.5 rounded hover:bg-gray-200">表示</button>
+                            <button onclick="handleCodeCaptured('${code}')" class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700">採用</button>
+                        </div>
+                    `;
+                    listContainer.appendChild(div);
+                });
+            }
+        }
+
+        function calculateCheckDigit(baseDigits) {
+            let sum = 0;
+            const len = baseDigits.length;
+            for (let i = 0; i < len; i++) {
+                let num = parseInt(baseDigits[len - 1 - i], 10);
+                sum += (i % 2 === 0) ? num * 3 : num * 1;
+            }
+            return (10 - (sum % 10)) % 10;
+        }
+
+        function validateCheckDigit(code) {
+            if (!/^\d+$/.test(code)) return false;
+            if (code.length !== 8 && code.length !== 12 && code.length !== 13 && code.length !== 14) return false;
+            const base = code.substring(0, code.length - 1);
+            const expected = calculateCheckDigit(base);
+            return parseInt(code[code.length - 1], 10) === expected;
+        }
+
+        // --- Database CRUD ---
+        function saveScannedToDB() {
+            const name = document.getElementById('saveName').value.trim();
+            const singleJan = document.getElementById('saveSingleJan').value.trim();
+            const boxJan = document.getElementById('saveBoxJan').value.trim();
+            const fileInput = document.getElementById('saveImageInput');
+
+            if (!name) {
+                alert("商品名を入力してください");
+                return;
+            }
+
+            const executeSave = (imgData) => {
+                const newItem = {
+                    id: Date.now().toString(),
+                    name,
+                    singleJan,
+                    boxJan,
+                    price: 0,
+                    qty: 10,
+                    image: imgData,
+                    updatedAt: new Date().toISOString()
+                };
+
+                itemsDB.push(newItem);
+                saveDBLocally();
+                alert("DBに登録しました");
+                renderDB();
+
+                document.getElementById('saveName').value = '';
+                document.getElementById('saveSingleJan').value = '';
+                document.getElementById('saveBoxJan').value = '';
+                document.getElementById('saveImageInput').value = '';
+            };
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => executeSave(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                executeSave('');
+            }
+        }
+
+        function saveDBLocally() {
+            localStorage.setItem('jan_master_db', JSON.stringify(itemsDB));
+            if (db && syncGroupId) syncToFirebase('db', itemsDB);
+        }
+
+        function renderDB() {
+            const tbody = document.getElementById('dbTableBody');
+            const query = (document.getElementById('dbSearchInput')?.value || '').toLowerCase();
+            tbody.innerHTML = '';
+
+            const filtered = itemsDB.filter(i => 
+                i.name.toLowerCase().includes(query) || 
+                (i.singleJan && i.singleJan.includes(query)) || 
+                (i.boxJan && i.boxJan.includes(query))
+            );
+
+            filtered.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="p-2">
+                        ${item.image ? `<img src="${item.image}" class="h-10 w-10 object-cover rounded">` : '<div class="h-10 w-10 bg-gray-200 rounded flex items-center justify-center text-[10px] text-gray-400">なし</div>'}
+                    </td>
+                    <td class="p-2 font-bold">${item.name}</td>
+                    <td class="p-2 font-mono">
+                        ${item.singleJan ? `
+                            <div class="flex items-center gap-1.5">
+                                <span>${item.singleJan}</span>
+                                <button onclick="showBarcodeModal('${item.name} (単品)', '${item.singleJan}')" class="text-blue-600 hover:text-blue-800 bg-blue-50 p-1 rounded" title="単品バーコードを表示">
+                                    <i class="fa-solid fa-barcode"></i>
+                                </button>
+                            </div>
+                        ` : '<span class="text-gray-400">-</span>'}
+                    </td>
+                    <td class="p-2 font-mono">
+                        ${item.boxJan ? `
+                            <div class="flex items-center gap-1.5">
+                                <span>${item.boxJan}</span>
+                                <button onclick="showBarcodeModal('${item.name} (箱)', '${item.boxJan}')" class="text-purple-600 hover:text-purple-800 bg-purple-50 p-1 rounded" title="箱バーコードを表示">
+                                    <i class="fa-solid fa-barcode"></i>
+                                </button>
+                            </div>
+                        ` : '<span class="text-gray-400">-</span>'}
+                    </td>
+                    <td class="p-2 text-center whitespace-nowrap">
+                        <button onclick="openEditDBModal('${item.id}')" class="text-blue-600 hover:text-blue-800 p-1" title="編集">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button onclick="deleteDbItem('${item.id}')" class="text-red-600 hover:text-red-800 p-1" title="削除">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterDB() { renderDB(); }
+
+        function recordDBSearch() {
+            const input = document.getElementById('dbSearchInput');
+            const query = String(input?.value || '').trim();
+            if (!query) return;
+            const key = query.toLocaleLowerCase();
+            const existing = dbSearchHistory.find(h => String(h.query || '').toLocaleLowerCase() === key);
+            if (existing) { existing.count = (Number(existing.count) || 0) + 1; existing.lastUsed = Date.now(); }
+            else dbSearchHistory.push({query, count: 1, lastUsed: Date.now()});
+            dbSearchHistory.sort((a,b) => (b.count || 0) - (a.count || 0) || (b.lastUsed || 0) - (a.lastUsed || 0));
+            dbSearchHistory = dbSearchHistory.slice(0, 30);
+            saveDBSearchHistory();
+            renderDB();
+        }
+
+        function renderDBSearchHistory() {
+            const wrap = document.getElementById('dbSearchHistory');
+            const items = document.getElementById('dbSearchHistoryItems');
+            if (!wrap || !items) return;
+            const top = [...dbSearchHistory].sort((a,b) => (b.count || 0) - (a.count || 0) || (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0,5);
+            wrap.classList.toggle('hidden', !top.length);
+            document.getElementById('dbHistoryClearBtn')?.remove();
+            items.innerHTML = top.map(h => `<div class="inline-flex items-center gap-1 border bg-gray-50 rounded pl-1"><button onclick="useDBSearchHistory('${encodeURIComponent(h.query)}')" class="hover:bg-blue-50 px-1.5 py-1 text-[11px] text-gray-700">${escapeHtml(h.query)} <span class="text-gray-400">×${Number(h.count)||1}</span></button><button onclick="decreaseDBSearchHistory('${encodeURIComponent(h.query)}')" title="検索回数を1減らす" class="text-amber-700 px-1 text-xs">−</button><button onclick="deleteDBSearchHistory('${encodeURIComponent(h.query)}')" title="この履歴を削除" class="text-red-600 px-1 text-xs">×</button></div>`).join('');
+            if (top.length) items.insertAdjacentHTML('afterend', '<div id="dbHistoryClearBtn" class="flex justify-end"><button onclick="clearDBSearchHistory()" class="text-[11px] text-red-600 underline">履歴をすべて削除</button></div>');
+        }
+
+        function saveDBSearchHistory() {
+            localStorage.setItem('jan_master_db_search_history', JSON.stringify(dbSearchHistory));
+            renderDBSearchHistory();
+        }
+
+        function useDBSearchHistory(encodedQuery) {
+            document.getElementById('dbSearchInput').value = decodeURIComponent(encodedQuery);
+            renderDB();
+            recordDBSearch();
+        }
+
+        function decreaseDBSearchHistory(encodedQuery) {
+            const query = decodeURIComponent(encodedQuery);
+            const item = dbSearchHistory.find(h => String(h.query || '').toLocaleLowerCase() === query.toLocaleLowerCase());
+            if (!item) return;
+            item.count = Math.max(0, (Number(item.count) || 1) - 1);
+            if (item.count <= 0) dbSearchHistory = dbSearchHistory.filter(h => h !== item);
+            saveDBSearchHistory();
+        }
+
+        function deleteDBSearchHistory(encodedQuery) {
+            const query = decodeURIComponent(encodedQuery);
+            dbSearchHistory = dbSearchHistory.filter(h => String(h.query || '').toLocaleLowerCase() !== query.toLocaleLowerCase());
+            saveDBSearchHistory();
+        }
+
+        function clearDBSearchHistory() {
+            if (!dbSearchHistory.length || !confirm('単品・箱DBの検索履歴をすべて削除しますか？')) return;
+            dbSearchHistory = [];
+            saveDBSearchHistory();
+        }
+
+        function deleteDbItem(id) {
+            if (confirm("削除しますか？")) {
+                itemsDB = itemsDB.filter(i => i.id !== id);
+                saveDBLocally();
+                renderDB();
+            }
+        }
+
+        function openEditDBModal(editId = null) {
+            const item = editId ? itemsDB.find(i => String(i.id) === String(editId)) : null;
+            document.getElementById('dbEditId').value = item?.id || '';
+            document.getElementById('dbModalTitle').textContent = item ? '商品データの編集' : '商品データの新規追加';
+            document.getElementById('dbEditName').value = item?.name || '';
+            document.getElementById('dbEditSingle').value = item?.singleJan || '';
+            document.getElementById('dbEditBox').value = item?.boxJan || '';
+            document.getElementById('dbEditPrice').value = item?.price ?? '';
+            document.getElementById('dbEditQty').value = item?.qty ?? 10;
+            document.getElementById('dbEditImageInput').value = '';
+            document.getElementById('dbModal').classList.remove('hidden');
+        }
+        function closeDbModal() {
+            document.getElementById('dbModal').classList.add('hidden');
+        }
+
+        function saveDbItem() {
+            const name = document.getElementById('dbEditName').value.trim();
+            if (!name) { alert('商品名を入力してください。'); return; }
+
+            const editId = document.getElementById('dbEditId').value;
+            const existing = editId ? itemsDB.find(i => String(i.id) === String(editId)) : null;
+            const fileInput = document.getElementById('dbEditImageInput');
+            const saveProc = (img) => {
+                const data = {
+                    ...(existing || {}),
+                    id: existing ? existing.id : Date.now().toString(),
+                    name,
+                    singleJan: document.getElementById('dbEditSingle').value.trim(),
+                    boxJan: document.getElementById('dbEditBox').value.trim(),
+                    price: Number(document.getElementById('dbEditPrice').value) || 0,
+                    qty: Number(document.getElementById('dbEditQty').value) || 10,
+                    image: img,
+                    updatedAt: new Date().toISOString()
+                };
+                if (existing) {
+                    const idx = itemsDB.findIndex(i => String(i.id) === String(editId));
+                    if (idx >= 0) itemsDB[idx] = data;
+                } else {
+                    itemsDB.push(data);
+                }
+                saveDBLocally();
+                renderDB();
+                closeDbModal();
+            };
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => saveProc(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                saveProc(existing?.image || '');
+            }
+        }
+
+        function openNoJanModal(editId = null) {
+            document.getElementById('noJanEditId').value = editId || '';
+            if (editId) {
+                const item = noJanItems.find(i => i.id === editId);
+                if (item) {
+                    document.getElementById('noJanModalTitle').innerText = "JAN無し商品の修正";
+                    document.getElementById('noJanName').value = item.name;
+                    document.getElementById('noJanCodeInput').value = item.code;
+                }
+            } else {
+                document.getElementById('noJanModalTitle').innerText = "JAN無し商品登録";
+                document.getElementById('noJanName').value = '';
+                document.getElementById('noJanCodeInput').value = '';
+            }
+            document.getElementById('noJanModal').classList.remove('hidden');
+        }
+
+        function closeNoJanModal() { 
+            document.getElementById('noJanModal').classList.add('hidden'); 
+        }
+
+        function saveNoJanItem() {
+            const name = document.getElementById('noJanName').value.trim();
+            const customCode = document.getElementById('noJanCodeInput').value.trim();
+            const editId = document.getElementById('noJanEditId').value;
+            if (!name) return;
+
+            const fileInput = document.getElementById('noJanImageInput');
+
+            const proceedSave = (img) => {
+                let code = customCode;
+                if (!code) {
+                    const generatedBase = '20' + Date.now().toString().substring(3, 13);
+                    const cd = calculateCheckDigit(generatedBase);
+                    code = generatedBase + cd;
+                }
+
+                if (editId) {
+                    const idx = noJanItems.findIndex(i => i.id === editId);
+                    if (idx !== -1) {
+                        noJanItems[idx].name = name;
+                        noJanItems[idx].code = code;
+                        if (img) noJanItems[idx].image = img;
+                    }
+                } else {
+                    noJanItems.push({
+                        id: Date.now().toString(),
+                        name,
+                        code,
+                        image: img
+                    });
+                }
+
+                localStorage.setItem('jan_master_nojan', JSON.stringify(noJanItems));
+                if (db && syncGroupId) syncToFirebase('nojan', noJanItems);
+                renderNoJan();
+                closeNoJanModal();
+            };
+
+            if (fileInput.files && fileInput.files[0]) {
+                const reader = new FileReader();
+                reader.onload = (e) => proceedSave(e.target.result);
+                reader.readAsDataURL(fileInput.files[0]);
+            } else {
+                const existingImg = editId ? (noJanItems.find(i => i.id === editId)?.image || '') : '';
+                proceedSave(existingImg);
+            }
+        }
+
+        function deleteNoJanItem(id) {
+            if (confirm("このJAN無し商品を削除しますか？")) {
+                noJanItems = noJanItems.filter(i => i.id !== id);
+                localStorage.setItem('jan_master_nojan', JSON.stringify(noJanItems));
+                if (db && syncGroupId) syncToFirebase('nojan', noJanItems);
+                renderNoJan();
+            }
+        }
+
+        function renderNoJan() {
+            const grid = document.getElementById('noJanGrid');
+            if (!grid) return;
+            const query = String(document.getElementById('noJanSearchInput')?.value || '').trim().toLowerCase();
+            grid.innerHTML = '';
+            const filtered = noJanItems.filter(item => `${item.name || ''} ${item.code || ''}`.toLowerCase().includes(query));
+            if (!filtered.length) {
+                grid.innerHTML = `<p class="col-span-full text-xs text-gray-400 py-3">${query ? '一致する商品がありません。' : 'JAN無し商品はまだ登録されていません。'}</p>`;
+                return;
+            }
+            filtered.forEach(item => {
+                const card = document.createElement('div');
+                card.className = "bg-gray-50 border rounded p-2 text-center space-y-1 relative group";
+                const safeName = escapeHtml(item.name || '名称未登録');
+                const safeCode = escapeHtml(item.code || '');
+                const id = String(item.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+                card.innerHTML = `
+                    ${item.image ? `<img src="${item.image}" class="h-20 w-full object-cover rounded mb-1">` : '<div class="h-20 bg-gray-200 rounded flex items-center justify-center text-gray-400 text-xs">画像なし</div>'}
+                    <p class="font-bold text-xs break-words">${safeName}</p>
+                    <p class="font-mono text-[10px] text-gray-500 break-all">${safeCode}</p>
+                    <button onclick="showEmergencyOrNoJanBarcode('${encodeURIComponent(item.name || 'JAN無し商品')}','${encodeURIComponent(item.code || '')}')" class="w-full bg-green-600 text-white text-xs py-1 rounded hover:bg-green-700">バーコード表示</button>
+                    <div class="flex gap-1 pt-1">
+                        <button onclick="openNoJanModal('${id}')" class="flex-1 bg-gray-200 text-gray-700 text-[10px] py-0.5 rounded hover:bg-gray-300">編集</button>
+                        <button onclick="deleteNoJanItem('${id}')" class="flex-1 bg-red-100 text-red-600 text-[10px] py-0.5 rounded hover:bg-red-200">削除</button>
+                    </div>`;
+                grid.appendChild(card);
+            });
+        }
+
+        function recordNoJanSearch() {
+            const input = document.getElementById('noJanSearchInput');
+            const query = String(input?.value || '').trim();
+            if (!query) return;
+            const key = query.toLocaleLowerCase();
+            const existing = noJanSearchHistory.find(h => String(h.query || '').toLocaleLowerCase() === key);
+            if (existing) { existing.count = (Number(existing.count) || 0) + 1; existing.lastUsed = Date.now(); }
+            else noJanSearchHistory.push({query, count: 1, lastUsed: Date.now()});
+            noJanSearchHistory.sort((a,b) => (b.count || 0) - (a.count || 0) || (b.lastUsed || 0) - (a.lastUsed || 0));
+            noJanSearchHistory = noJanSearchHistory.slice(0, 30);
+            localStorage.setItem('jan_master_nojan_search_history', JSON.stringify(noJanSearchHistory));
+            renderNoJanSearchHistory();
+            renderNoJan();
+        }
+
+        function renderNoJanSearchHistory() {
+            const wrap = document.getElementById('noJanSearchHistory');
+            const items = document.getElementById('noJanSearchHistoryItems');
+            if (!wrap || !items) return;
+            const top = [...noJanSearchHistory].sort((a,b) => (b.count || 0) - (a.count || 0) || (b.lastUsed || 0) - (a.lastUsed || 0)).slice(0,5);
+            wrap.classList.toggle('hidden', !top.length);
+            document.getElementById('noJanHistoryClearBtn')?.remove();
+            items.innerHTML = top.map(h => `<div class="inline-flex items-center gap-1 border bg-gray-50 rounded pl-1"><button onclick="useNoJanSearchHistory('${encodeURIComponent(h.query)}')" class="hover:bg-blue-50 px-1.5 py-1 text-[11px] text-gray-700">${escapeHtml(h.query)} <span class="text-gray-400">×${Number(h.count)||1}</span></button><button onclick="decreaseNoJanSearchHistory('${encodeURIComponent(h.query)}')" title="検索回数を1減らす" class="text-amber-700 px-1 text-xs">−</button><button onclick="deleteNoJanSearchHistory('${encodeURIComponent(h.query)}')" title="この履歴を削除" class="text-red-600 px-1 text-xs">×</button></div>`).join('');
+            if (top.length) items.insertAdjacentHTML('afterend', '<div id="noJanHistoryClearBtn" class="flex justify-end"><button onclick="clearNoJanSearchHistory()" class="text-[11px] text-red-600 underline">履歴をすべて削除</button></div>');
+        }
+
+        function saveNoJanSearchHistory() {
+            localStorage.setItem('jan_master_nojan_search_history', JSON.stringify(noJanSearchHistory));
+            renderNoJanSearchHistory();
+        }
+
+        function decreaseNoJanSearchHistory(encodedQuery) {
+            const query = decodeURIComponent(encodedQuery);
+            const item = noJanSearchHistory.find(h => String(h.query || '').toLocaleLowerCase() === query.toLocaleLowerCase());
+            if (!item) return;
+            item.count = Math.max(0, (Number(item.count) || 1) - 1);
+            if (item.count <= 0) noJanSearchHistory = noJanSearchHistory.filter(h => h !== item);
+            saveNoJanSearchHistory();
+        }
+
+        function deleteNoJanSearchHistory(encodedQuery) {
+            const query = decodeURIComponent(encodedQuery);
+            noJanSearchHistory = noJanSearchHistory.filter(h => String(h.query || '').toLocaleLowerCase() !== query.toLocaleLowerCase());
+            saveNoJanSearchHistory();
+        }
+
+        function clearNoJanSearchHistory() {
+            if (!noJanSearchHistory.length) return;
+            if (!confirm('JAN無し商品の検索履歴をすべて削除しますか？')) return;
+            noJanSearchHistory = [];
+            saveNoJanSearchHistory();
+        }
+
+        function useNoJanSearchHistory(encodedQuery) {
+            const input = document.getElementById('noJanSearchInput');
+            if (input) input.value = decodeURIComponent(encodedQuery);
+            renderNoJan();
+            recordNoJanSearch();
+        }
+
+        function showEmergencyOrNoJanBarcode(encodedName, encodedCode) {
+            showBarcodeModal(decodeURIComponent(encodedName), decodeURIComponent(encodedCode));
+        }
+
+        // --- 緊急時コード管理 ---
+        function saveEmergencyLocal() {
+            localStorage.setItem('jan_master_emergency', JSON.stringify(emergencyCodes));
+            localStorage.setItem('jan_master_emergency_headings', JSON.stringify(emergencyHeadings));
+            if (db && syncGroupId) { syncToFirebase('emergency', emergencyCodes); syncToFirebase('emergencyHeadings', emergencyHeadings.map((name, i) => ({id: String(i), name}))); }
+        }
+
+        function renderEmergencyCodes() {
+            const list = document.getElementById('emergencyCodeList');
+            if (!list) return;
+            const query = String(document.getElementById('emergencySearchInput')?.value || '').trim().toLowerCase();
+            list.innerHTML = '';
+            const headings = [...new Set(['共通', ...emergencyHeadings.filter(Boolean)])];
+            let any = false;
+            headings.forEach(heading => {
+                const rows = emergencyCodes.filter(item => (item.heading || '共通') === heading && `${item.name || ''} ${item.period || ''} ${item.code || ''} ${heading}`.toLowerCase().includes(query));
+                if (!rows.length && query) return;
+                any = any || rows.length > 0;
+                // 見出しに登録商品がない場合は初期状態で折りたたむ
+                const collapsed = Object.prototype.hasOwnProperty.call(emergencyCollapsedHeadings, heading)
+                    ? !!emergencyCollapsedHeadings[heading]
+                    : rows.length === 0;
+                const section = document.createElement('section');
+                section.className = 'border rounded-lg overflow-hidden';
+                section.innerHTML = `<div class="flex items-center justify-between bg-indigo-50 px-3 py-2 gap-2"><button type="button" class="flex items-center gap-2 min-w-0 text-left flex-1" data-toggle-heading><i class="fa-solid ${collapsed ? 'fa-chevron-right' : 'fa-chevron-down'} text-[10px] text-indigo-700"></i><h4 class="font-bold text-sm text-indigo-900 break-words">${escapeHtml(heading)}</h4><span class="text-[10px] text-indigo-600">${rows.length}件</span></button><div class="flex items-center gap-2 shrink-0">${heading !== '共通' ? `<button onclick="deleteEmergencyHeading('${encodeURIComponent(heading)}')" class="text-[10px] text-red-600">見出し削除</button>` : ''}</div></div><div class="p-2 space-y-2 ${collapsed ? 'hidden' : ''}" data-heading-body></div>`;
+                list.appendChild(section);
+                const toggle = section.querySelector('[data-toggle-heading]');
+                const body = section.querySelector('[data-heading-body]');
+                toggle.onclick = () => {
+                    const nowCollapsed = !body.classList.contains('hidden');
+                    body.classList.toggle('hidden', nowCollapsed);
+                    const icon = toggle.querySelector('i');
+                    icon.className = `fa-solid ${nowCollapsed ? 'fa-chevron-right' : 'fa-chevron-down'} text-[10px] text-indigo-700`;
+                    emergencyCollapsedHeadings[heading] = nowCollapsed;
+                    localStorage.setItem('jan_master_emergency_collapsed', JSON.stringify(emergencyCollapsedHeadings));
+                };
+                rows.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'border rounded p-3 space-y-2';
+                    const safeCode = String(item.code || '');
+                    row.innerHTML = `<div class="flex justify-between items-start gap-2"><div class="min-w-0"><p class="font-bold text-sm break-words">${escapeHtml(item.name || '名称未登録')}</p><p class="text-xs text-gray-500">期間：${escapeHtml(item.period || '未設定')}</p></div><div class="flex gap-2 shrink-0"><button class="text-blue-600 text-xs" data-edit="${escapeHtml(item.id)}">編集</button><button class="text-red-600 text-xs" data-delete="${escapeHtml(item.id)}">削除</button></div></div><div class="hidden bg-white border rounded p-2 justify-center overflow-x-auto" data-barcode-wrap><svg class="emergency-barcode max-w-full" data-code="${encodeURIComponent(safeCode)}"></svg></div><p class="font-mono text-sm font-bold tracking-wide break-all">${escapeHtml(safeCode)}</p><div class="grid grid-cols-2 gap-2"><button class="w-full bg-gray-100 text-gray-700 rounded py-1.5 text-xs font-bold" data-toggle-barcode>バーコードを表示</button><button class="w-full bg-indigo-50 text-indigo-700 rounded py-1.5 text-xs font-bold" data-show="${escapeHtml(item.id)}">大きく表示</button></div>`;
+                    body.appendChild(row);
+                    row.querySelector('[data-edit]').onclick = () => openEmergencyModal(item.id);
+                    row.querySelector('[data-delete]').onclick = () => deleteEmergencyCode(item.id);
+                    row.querySelector('[data-show]').onclick = () => showBarcodeModal(item.name || '緊急時コード', safeCode, 'CODE128');
+                    const barcodeWrap = row.querySelector('[data-barcode-wrap]');
+                    const toggleBarcode = row.querySelector('[data-toggle-barcode]');
+                    toggleBarcode.onclick = () => {
+                        const shouldShow = barcodeWrap.classList.contains('hidden');
+                        if (shouldShow) {
+                            const svg = row.querySelector('svg');
+                            if (svg && !svg.dataset.rendered) {
+                                try {
+                                    const format = /^\d{13}$/.test(safeCode) ? 'EAN13' : /^\d{8}$/.test(safeCode) ? 'EAN8' : 'CODE128';
+                                    JsBarcode(svg, safeCode, {format, width: 1.5, height: 50, displayValue: false, margin: 4});
+                                    svg.dataset.rendered = 'true';
+                                } catch (e) {
+                                    barcodeWrap.innerHTML = '<p class="text-[11px] text-red-500">このコードはバーコード化できません。数字表記は保存されています。</p>';
+                                }
+                            }
+                            barcodeWrap.classList.remove('hidden');
+                            barcodeWrap.classList.add('flex');
+                            toggleBarcode.textContent = 'バーコードを隠す';
+                        } else {
+                            barcodeWrap.classList.add('hidden');
+                            barcodeWrap.classList.remove('flex');
+                            toggleBarcode.textContent = 'バーコードを表示';
+                        }
+                    };
+                });
+            });
+            if (!list.children.length || (!any && query)) list.innerHTML = '<p class="text-xs text-gray-400 py-3">該当するコードはありません。</p>';
+        }
+
+        function refreshEmergencyHeadingSelect(selected = '共通') {
+            const select = document.getElementById('emergencyHeadingSelect');
+            if (!select) return;
+            const headings = [...new Set(['共通', ...emergencyHeadings.filter(Boolean)])];
+            select.innerHTML = headings.map(h => `<option value="${escapeHtml(h)}">${escapeHtml(h)}</option>`).join('');
+            select.value = headings.includes(selected) ? selected : '共通';
+        }
+
+        function openEmergencyModal(editId = null) {
+            const item = editId ? emergencyCodes.find(i => i.id === editId) : null;
+            document.getElementById('emergencyEditId').value = item?.id || '';
+            document.getElementById('emergencyModalTitle').textContent = item ? '緊急時コード編集' : '緊急時コード登録';
+            document.getElementById('emergencyPeriod').value = item?.period || '';
+            document.getElementById('emergencyName').value = item?.name || '';
+            document.getElementById('emergencyCode').value = item?.code || '';
+            refreshEmergencyHeadingSelect(item?.heading || '共通');
+            document.getElementById('emergencyModal').classList.remove('hidden');
+        }
+        function closeEmergencyModal() { document.getElementById('emergencyModal').classList.add('hidden'); }
+        function saveEmergencyCode() {
+            const name = document.getElementById('emergencyName').value.trim();
+            const code = document.getElementById('emergencyCode').value.trim();
+            const period = document.getElementById('emergencyPeriod').value.trim();
+            const heading = document.getElementById('emergencyHeadingSelect').value || '共通';
+            const id = document.getElementById('emergencyEditId').value;
+            if (!name || !code) { alert('クーポン名とコードを入力してください。'); return; }
+            if (!/^\d+$/.test(code) && !/^[A-Za-z0-9-]+$/.test(code)) { alert('コードは数字、または英数字とハイフンで入力してください。'); return; }
+            const item = {id: id || Date.now().toString(), heading, period, name, code, updatedAt: new Date().toISOString()};
+            const idx = emergencyCodes.findIndex(i => i.id === item.id);
+            if (idx >= 0) emergencyCodes[idx] = item; else emergencyCodes.push(item);
+            saveEmergencyLocal(); renderEmergencyCodes(); closeEmergencyModal();
+        }
+        function deleteEmergencyCode(id) {
+            if (!confirm('この緊急時コードを削除しますか？')) return;
+            emergencyCodes = emergencyCodes.filter(i => i.id !== id); saveEmergencyLocal(); renderEmergencyCodes();
+        }
+        function openEmergencyHeadingModal() { document.getElementById('emergencyHeadingName').value = ''; document.getElementById('emergencyHeadingModal').classList.remove('hidden'); }
+        function closeEmergencyHeadingModal() { document.getElementById('emergencyHeadingModal').classList.add('hidden'); }
+        function saveEmergencyHeading() {
+            const name = document.getElementById('emergencyHeadingName').value.trim();
+            if (!name) return;
+            if (!emergencyHeadings.includes(name)) emergencyHeadings.push(name);
+            saveEmergencyLocal(); renderEmergencyCodes(); closeEmergencyHeadingModal();
+        }
+        function deleteEmergencyHeading(encodedName) {
+            const name = decodeURIComponent(encodedName);
+            if (!confirm(`見出し「${name}」を削除しますか？登録済みコードは「共通」に移動します。`)) return;
+            emergencyCodes.forEach(item => { if ((item.heading || '共通') === name) item.heading = '共通'; });
+            emergencyHeadings = emergencyHeadings.filter(h => h !== name); saveEmergencyLocal(); renderEmergencyCodes();
+        }
+        function useScannedCodeForEmergency() {
+            if (!currentScannedCode) { alert('先にスキャン画面でコードを読み取ってください。'); return; }
+            document.getElementById('emergencyCode').value = currentScannedCode;
+        }
+        function scanEmergencyCodeFromCameraPage() { emergencyScanMode = true; closeEmergencyModal(); switchTab('scan'); alert('カメラを開始してください。読み取りに成功すると、緊急時コード登録画面に自動で戻ります。'); }
+
+        // 入力欄右端のクリアボタン
+        function setupClearButtons() {
+            document.querySelectorAll('input:not([type="file"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])').forEach(input => {
+                if (input.dataset.clearReady === '1') return;
+                input.dataset.clearReady = '1';
+                const parent = input.parentElement;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'relative min-w-0';
+                ['w-full','flex-1','shrink-0','min-w-0'].forEach(cls => { if (input.classList.contains(cls)) { wrapper.classList.add(cls); input.classList.remove(cls); } });
+                input.classList.add('w-full','pr-8');
+                parent.insertBefore(wrapper, input);
+                wrapper.appendChild(input);
+                const btn = document.createElement('button');
+                btn.type = 'button'; btn.className = 'absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 flex items-center justify-center';
+                btn.title = '入力内容をクリア'; btn.setAttribute('aria-label', '入力内容をクリア'); btn.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+                btn.addEventListener('click', () => { input.value = ''; input.dispatchEvent(new Event('input', {bubbles:true})); input.focus(); });
+                wrapper.appendChild(btn);
+            });
+        }
+
+        // --- Modals & Utilities ---
+        function showBarcodeModal(title, code, formatOverride = '') {
+            if (!code) return;
+            document.getElementById('barcodeModalTitle').innerText = title;
+            document.getElementById('barcodeModalCode').innerText = code;
+            document.getElementById('barcodeModal').classList.remove('hidden');
+            try {
+                JsBarcode("#barcodeModalSvg", code, { 
+                    format: formatOverride || (/^\d{13}$/.test(String(code)) ? "EAN13" : /^\d{14}$/.test(String(code)) ? "ITF" : /^\d{8}$/.test(String(code)) ? "EAN8" : "CODE128"), 
+                    width: 2.5, 
+                    height: 85 
+                });
+            } catch (e) {
+                console.log("Barcode render modal error", e);
+            }
+        }
+        function closeBarcodeModal() { document.getElementById('barcodeModal').classList.add('hidden'); }
+
+        function addToHistory(code) {
+            scanHistory.unshift({ code, time: new Date().toLocaleTimeString() });
+            if (scanHistory.length > 10) scanHistory.pop();
+            localStorage.setItem('jan_master_history', JSON.stringify(scanHistory));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const list = document.getElementById('scanHistoryList');
+            if (scanHistory.length === 0) return;
+            list.innerHTML = '';
+            scanHistory.forEach(h => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center py-1";
+                div.innerHTML = `
+                    <span class="font-mono font-bold">${h.code}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-400 text-[10px]">${h.time}</span>
+                        <button onclick="useScanHistory('${encodeURIComponent(h.code)}')" class="bg-green-50 text-green-700 border border-green-200 rounded px-2 py-1 text-[10px] font-bold">使う</button>
+                        <button onclick="showBarcodeModal('スキャン履歴', '${h.code}')" title="バーコード表示" class="text-blue-600 text-xs"><i class="fa-solid fa-barcode"></i></button>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function useScanHistory(encodedCode) {
+            const code = decodeURIComponent(encodedCode);
+            document.getElementById('manualInput').value = code;
+            handleCodeCaptured(code);
+            document.getElementById('scanResultArea').scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+
+        // --- Firebase Realtime Sync Setup ---
+        function handleSyncButton() {
+            if (isSyncConnected) {
+                logoutSync();
+            } else {
+                openSyncModal();
+            }
+        }
+
+        function openSyncModal() {
+            document.getElementById('syncGroupId').value = syncGroupId;
+            const cfg = JSON.parse(localStorage.getItem('jan_master_firebase_config') || '{}');
+            document.getElementById('syncFirebaseApiKey').value = cfg.apiKey || '';
+            document.getElementById('syncFirebaseAuthDomain').value = cfg.authDomain || '';
+            document.getElementById('syncFirebaseProjectId').value = cfg.projectId || '';
+            document.getElementById('syncFirebaseStorageBucket').value = cfg.storageBucket || '';
+            document.getElementById('syncFirebaseAppId').value = cfg.appId || '';
+            document.getElementById('syncModal').classList.remove('hidden');
+        }
+        function closeSyncModal() { document.getElementById('syncModal').classList.add('hidden'); }
+
+        async function saveSyncSettings() {
+            const requestedGroupId = document.getElementById('syncGroupId').value.trim();
+            if (!requestedGroupId) {
+                alert('グループIDを入力してください。');
+                return;
+            }
+            const firebaseConfig = {
+                apiKey: document.getElementById('syncFirebaseApiKey').value.trim(),
+                authDomain: document.getElementById('syncFirebaseAuthDomain').value.trim(),
+                projectId: document.getElementById('syncFirebaseProjectId').value.trim(),
+                storageBucket: document.getElementById('syncFirebaseStorageBucket').value.trim(),
+                appId: document.getElementById('syncFirebaseAppId').value.trim()
+            };
+            const existingConfig = JSON.parse(localStorage.getItem('jan_master_firebase_config') || '{}');
+            // 以前に保存した設定を入力欄が空のときに保持する。ただし仮値は有効設定として扱わない。
+            Object.keys(firebaseConfig).forEach(key => {
+                if (!firebaseConfig[key] && existingConfig[key]) firebaseConfig[key] = existingConfig[key];
+            });
+            if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId ||
+                firebaseConfig.apiKey.includes('DemoConfigKey')) {
+                alert('Firebaseの実際のWebアプリ設定が必要です。Firebase Consoleから apiKey・authDomain・projectId を入力してください。以前のファイルには仮の設定値が入っていました。');
+                return;
+            }
+            closeSyncModal();
+            syncGroupId = requestedGroupId;
+            localStorage.setItem('jan_master_sync_id', syncGroupId);
+            localStorage.setItem('jan_master_firebase_config', JSON.stringify(firebaseConfig));
+            localStorage.setItem('jan_master_sync_logged_in', 'true');
+            try {
+                await initFirebase();
+            } catch (err) {
+                localStorage.setItem('jan_master_sync_logged_in', 'false');
+                logoutSync(false);
+                showSyncError(err);
+            }
+        }
+
+        function updateSyncStatus(connected, message = '') {
+            const status = document.getElementById('syncStatus');
+            const button = document.getElementById('syncActionButton');
+            if (!status || !button) return;
+            if (connected) {
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-green-400 inline-block"></span> ログイン中`;
+                button.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> ログアウト';
+                button.className = 'text-xs bg-white text-red-600 font-bold px-2 py-1 rounded hover:bg-red-50';
+                button.title = message || `接続先: ${syncGroupId}`;
+            } else {
+                status.innerHTML = `<span class="w-2 h-2 rounded-full bg-yellow-400 inline-block"></span> ${message || 'ログアウト中'}`;
+                button.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> ログイン';
+                button.className = 'text-xs bg-white text-blue-600 font-bold px-2 py-1 rounded hover:bg-blue-50';
+                button.title = 'クラウド同期にログイン';
+            }
+        }
+
+        function showSyncError(err) {
+            console.error('Cloud sync error:', err);
+            updateSyncStatus(false, '同期エラー');
+            const detail = err?.message || String(err || '不明なエラー');
+            let advice = 'Firebase設定・通信環境・Firestoreのアクセスルールを確認してください。';
+            if (/permission-denied|Missing or insufficient permissions/i.test(detail)) advice = 'Firestoreのセキュリティルールで読み書きが拒否されています。Firebase ConsoleのFirestore Database → ルールを確認してください。';
+            else if (/api-key-not-valid|invalid-api-key|API key not valid/i.test(detail)) advice = 'apiKeyが正しくありません。Firebase ConsoleのWebアプリ設定からコピーし直してください。';
+            else if (/project.*not found|NOT_FOUND/i.test(detail)) advice = 'projectIdが違うか、Firestore Databaseがまだ作成されていない可能性があります。';
+            alert('クラウド同期に接続できませんでした。\n' + advice + '\n\n詳細: ' + detail);
+        }
+
+        function logoutSync(updateUI = true) {
+            syncUnsubscribers.forEach(unsub => { try { unsub(); } catch (_) {} });
+            syncUnsubscribers = [];
+            isSyncConnected = false;
+            syncQueues = {};
+            syncKnownData = {};
+            localStorage.setItem('jan_master_sync_logged_in', 'false');
+            if (updateUI) updateSyncStatus(false);
+        }
+
+        function getLocalSyncData(type) {
+            if (type === 'db') return itemsDB;
+            if (type === 'nojan') return noJanItems;
+            if (type === 'emergency') return emergencyCodes;
+            if (type === 'emergencyHeadings') return emergencyHeadings.map((name, i) => ({ id: String(i), name }));
+            return [];
+        }
+
+        function applyRemoteCollection(type, items) {
+            // 直近のクラウド状態を記録し、次回保存では変更・削除された項目だけを送る。
+            syncKnownData[type] = new Map((items || []).filter(item => item && item.id != null).map(item => [String(item.id), JSON.stringify(item)]));
+            // 空配列も有効な同期結果。空のときもローカルを必ず空にすることで削除済みデータの復活を防ぐ。
+            if (type === 'db') {
+                itemsDB = items;
+                localStorage.setItem('jan_master_db', JSON.stringify(itemsDB));
+                renderDB();
+                if (currentScannedCode) {
+                    applyDatabaseMatchToForm(currentScannedCode);
+                    renderLinkedDatabaseMatch(currentScannedCode);
+                }
+            } else if (type === 'nojan') {
+                noJanItems = items;
+                localStorage.setItem('jan_master_nojan', JSON.stringify(noJanItems));
+                renderNoJan();
+            } else if (type === 'emergency') {
+                emergencyCodes = items;
+                localStorage.setItem('jan_master_emergency', JSON.stringify(emergencyCodes));
+                renderEmergencyCodes();
+            } else if (type === 'emergencyHeadings') {
+                emergencyHeadings = [...new Set(['共通', ...items.map(x => x.name).filter(Boolean)])];
+                localStorage.setItem('jan_master_emergency_headings', JSON.stringify(emergencyHeadings));
+                renderEmergencyCodes();
+            }
+        }
+
+        async function initFirebase() {
+            if (!syncGroupId) throw new Error('グループIDがありません');
+            const firebaseConfig = JSON.parse(localStorage.getItem('jan_master_firebase_config') || '{}');
+            if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId ||
+                firebaseConfig.apiKey.includes('DemoConfigKey')) {
+                throw new Error('Firebaseの実際のWebアプリ設定が未登録です。ログイン画面の「Firebase接続設定」から設定してください。');
+            }
+            const existingApp = firebase.apps.find(app => app.name === '[DEFAULT]');
+            if (!existingApp) {
+                firebase.initializeApp(firebaseConfig);
+            } else if (existingApp.options.projectId !== firebaseConfig.projectId) {
+                throw new Error('Firebase設定が前回と異なります。ページを再読み込みしてからログインし直してください。');
+            }
+            db = firebase.firestore();
+            const groupRef = db.collection('groups').doc(syncGroupId);
+            const types = ['db', 'nojan', 'emergency', 'emergencyHeadings'];
+            const markerRef = groupRef.collection('_meta').doc('syncState');
+
+            // 初回接続では、クラウドにデータがある分類を端末側で上書きしない。
+            // クラウドが空の分類に限って、端末データを初期登録する。
+            const marker = await markerRef.get();
+            if (!marker.exists) {
+                for (const type of types) {
+                    const collectionRef = groupRef.collection(type);
+                    const snap = await collectionRef.get();
+                    if (snap.size > 0) {
+                        const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.data().id ?? doc.id }));
+                        applyRemoteCollection(type, items);
+                    } else {
+                        await reconcileCloudCollection(collectionRef, getLocalSyncData(type));
+                        syncKnownData[type] = new Map((getLocalSyncData(type) || []).filter(item => item && item.id != null).map(item => [String(item.id), JSON.stringify(item)]));
+                    }
+                }
+                await markerRef.set({ initialized: true, initializedAt: firebase.firestore.FieldValue.serverTimestamp() });
+            } else {
+                // 初期化済みのグループはクラウドを正本として読み込み、削除結果も含めて完全一致させる。
+                for (const type of types) {
+                    const snap = await groupRef.collection(type).get();
+                    const items = snap.docs.map(doc => ({ ...doc.data(), id: doc.data().id ?? doc.id }));
+                    applyRemoteCollection(type, items);
+                }
+            }
+
+            // 以前の接続があれば解除してから、リアルタイム監視を開始する。
+            syncUnsubscribers.forEach(unsub => { try { unsub(); } catch (_) {} });
+            syncUnsubscribers = [];
+            types.forEach(type => {
+                const unsub = groupRef.collection(type).onSnapshot(snapshot => {
+                    const items = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.data().id ?? doc.id }));
+                    applyRemoteCollection(type, items);
+                }, err => {
+                    console.error(`Sync listener error (${type})`, err);
+                    updateSyncStatus(false, '同期エラー');
+                });
+                syncUnsubscribers.push(unsub);
+            });
+            isSyncConnected = true;
+            localStorage.setItem('jan_master_sync_logged_in', 'true');
+            updateSyncStatus(true);
+        }
+
+        async function reconcileCloudCollection(collectionRef, data) {
+            const existing = await collectionRef.get();
+            const desired = new Map((data || []).filter(item => item && item.id != null).map(item => [String(item.id), item]));
+            const operations = [];
+            existing.docs.forEach(doc => {
+                if (!desired.has(doc.id)) operations.push({ kind: 'delete', ref: doc.ref });
+            });
+            desired.forEach((item, id) => operations.push({ kind: 'set', ref: collectionRef.doc(id), item }));
+            // Firestore batchは500操作上限のため余裕を持って分割
+            for (let i = 0; i < operations.length; i += 450) {
+                const batch = db.batch();
+                operations.slice(i, i + 450).forEach(op => {
+                    if (op.kind === 'delete') batch.delete(op.ref);
+                    else batch.set(op.ref, op.item);
+                });
+                await batch.commit();
+            }
+        }
+
+        function syncToFirebase(type, data) {
+            if (!db || !syncGroupId || !isSyncConnected) return;
+            const collectionRef = db.collection('groups').doc(syncGroupId).collection(type);
+            const baseline = syncKnownData[type] || new Map();
+            const current = new Map((data || []).filter(item => item && item.id != null).map(item => [String(item.id), item]));
+            const deletes = [...baseline.keys()].filter(id => !current.has(id));
+            const writes = [...current.entries()]
+                .filter(([id, item]) => !baseline.has(id) || baseline.get(id) !== JSON.stringify(item))
+                .map(([id, item]) => ({ id, item }));
+            if (!deletes.length && !writes.length) return;
+
+            // 全件上書きではなく差分だけを送信。他端末で新しく追加された別項目を、古い一覧で消さない。
+            syncQueues[type] = (syncQueues[type] || Promise.resolve())
+                .catch(() => {})
+                .then(async () => {
+                    const operations = [
+                        ...deletes.map(id => ({ kind: 'delete', ref: collectionRef.doc(id) })),
+                        ...writes.map(({ id, item }) => ({ kind: 'set', ref: collectionRef.doc(id), item }))
+                    ];
+                    for (let i = 0; i < operations.length; i += 450) {
+                        const batch = db.batch();
+                        operations.slice(i, i + 450).forEach(op => {
+                            if (op.kind === 'delete') batch.delete(op.ref);
+                            else batch.set(op.ref, op.item);
+                        });
+                        await batch.commit();
+                    }
+                })
+                .catch(err => {
+                    console.error(`Sync write error (${type})`, err);
+                    updateSyncStatus(false, '同期エラー');
+                });
+        }
+    </script>
+</body>
+</html>
