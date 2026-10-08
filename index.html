@@ -40,7 +40,7 @@
 
 <style>
 .active-tab{border-bottom:3px solid #2563eb;color:#2563eb;font-weight:bold}
-#reader video, #field-reader video{border-radius:.75rem; object-fit: cover;}
+#reader video, #ocr-video{border-radius:.75rem; object-fit: cover;}
 
 /* バーコード認識ガイドフレーム */
 .scan-guide-overlay {
@@ -53,7 +53,7 @@
 }
 .scan-guide-box {
   width: 85%;
-  height: 150px;
+  height: 140px;
   border: 2px dashed rgba(59, 130, 246, 0.8);
   border-radius: 12px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
@@ -146,19 +146,69 @@
         </div>
         <button onclick="closeScanResult()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
       </div>
+      
       <div class="bg-slate-50 p-3 rounded-lg flex flex-col items-center justify-center border border-slate-200">
         <svg id="scan-barcode-svg" class="max-w-full"></svg>
         <span id="barcode-error-msg" class="text-xs text-red-500 mt-1 hidden">エラー: 無効な形式です</span>
       </div>
-      <div class="space-y-2">
+
+      <!-- 紐付け登録データ（別枠表示） -->
+      <div id="linked-data-box" class="bg-indigo-50/70 border-2 border-indigo-200 rounded-xl p-3.5 space-y-2 hidden">
+        <div class="flex items-center justify-between border-b border-indigo-200 pb-1.5">
+          <span class="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-link text-indigo-600"></i> 紐付け登録済みデータ
+          </span>
+          <span id="linked-role-badge" class="text-[10px] bg-indigo-200 text-indigo-800 font-bold px-2 py-0.5 rounded-full">---</span>
+        </div>
+        <div class="space-y-1 text-xs">
+          <div id="linked-product-name" class="font-bold text-slate-800 text-sm">---</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 font-mono text-slate-600">
+            <div>単品JAN: <b id="linked-unit-jan" class="text-slate-900">---</b></div>
+            <div>箱JAN: <b id="linked-box-jan" class="text-indigo-700">---</b></div>
+          </div>
+          <div id="linked-details" class="text-slate-500 pt-0.5">---</div>
+        </div>
+      </div>
+
+      <!-- その場で完結できる派生操作エリア -->
+      <div class="space-y-3 pt-1">
         <div class="grid grid-cols-2 gap-2">
-          <button onclick="actionFromScan('predict')" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i><div class="text-xs font-bold">単品 ⇔ 箱JAN予測</div>
+          <button onclick="toggleInPlacePredict()" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
+            <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i>
+            <div>
+              <div class="text-xs font-bold">単品 ⇔ 箱JAN 予測 (±1)</div>
+              <div class="text-[10px] text-indigo-600">その場で計算展開</div>
+            </div>
           </button>
-          <button onclick="actionFromScan('itf')" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2.5 transition">
-            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i><div class="text-xs font-bold">ITF 14桁 変換</div>
+          <button onclick="toggleInPlaceITF()" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
+            <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i>
+            <div>
+              <div class="text-xs font-bold">ITF 14桁 変換</div>
+              <div class="text-[10px] text-teal-600">その場で相互変換</div>
+            </div>
           </button>
         </div>
+
+        <!-- その場展開コンテンツ: 箱JAN予測結果 -->
+        <div id="inplace-predict-box" class="bg-slate-50 p-3 rounded-xl border border-indigo-100 space-y-2 hidden">
+          <div class="text-xs font-bold text-indigo-900 border-b pb-1 flex items-center justify-between">
+            <span><i class="fa-solid fa-boxes-packing"></i> 単品 ⇔ 箱JAN 予測結果 (±1)</span>
+            <button onclick="openLinkModal(lastScannedCode, '')" class="text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded font-bold">手動紐付け</button>
+          </div>
+          <div id="inplace-predict-results" class="space-y-2"></div>
+        </div>
+
+        <!-- その場展開コンテンツ: ITF変換結果 -->
+        <div id="inplace-itf-box" class="bg-slate-50 p-3 rounded-xl border border-teal-100 space-y-2 hidden">
+          <div class="text-xs font-bold text-teal-900 border-b pb-1"><i class="fa-solid fa-arrow-right-arrow-left"></i> ITF / JAN 変換結果</div>
+          <div class="space-y-1 font-mono text-xs">
+            <div id="inplace-itf-label" class="text-slate-500">---</div>
+            <div id="inplace-itf-val" class="text-lg font-bold text-teal-800">---</div>
+            <div id="inplace-itf-status" class="text-[11px]">---</div>
+          </div>
+          <div class="flex justify-center bg-white p-2 border rounded"><svg id="inplace-itf-svg"></svg></div>
+        </div>
+
         <button onclick="openScanToFavModal()" class="w-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 text-sm transition">
           <i class="fa-solid fa-layer-group text-amber-500"></i> 「JAN無し」リストに保存 (写真撮影可)
         </button>
@@ -318,7 +368,7 @@
 
 <!-- Modals -->
 
-<!-- 単品⇔箱の即時紐付けダイアログ -->
+<!-- 単品⇔箱の即時紐付けダイアログ（役割選択機能付き） -->
 <div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -330,9 +380,24 @@
         <label class="block text-xs font-semibold text-slate-600 mb-1">商品名 *</label>
         <input type="text" id="link-name-input" placeholder="例: 新規登録商品" class="w-full border rounded-lg px-3 py-2 text-sm">
       </div>
-      <div class="bg-slate-50 p-3 rounded-lg border text-xs space-y-1 font-mono">
-        <div>単品JAN: <b id="link-jan-val" class="text-slate-800">---</b></div>
-        <div>箱JAN: <b id="link-boxjan-val" class="text-indigo-600">---</b></div>
+      
+      <!-- スキャンしたJANの役割選択 -->
+      <div class="bg-slate-50 p-3 rounded-lg border space-y-2 text-xs">
+        <label class="block font-semibold text-slate-700">スキャンコードの扱いを選択:</label>
+        <div class="flex gap-2">
+          <label class="flex-1 bg-white border border-slate-300 rounded-lg p-2 flex items-center gap-1.5 cursor-pointer hover:bg-slate-100">
+            <input type="radio" name="link-role" value="unit" id="link-role-unit" checked onchange="updateLinkModalView()">
+            <span class="font-bold text-slate-800">単品JAN</span>
+          </label>
+          <label class="flex-1 bg-white border border-slate-300 rounded-lg p-2 flex items-center gap-1.5 cursor-pointer hover:bg-slate-100">
+            <input type="radio" name="link-role" value="box" id="link-role-box" onchange="updateLinkModalView()">
+            <span class="font-bold text-indigo-800">箱JAN</span>
+          </label>
+        </div>
+        <div class="pt-2 border-t font-mono space-y-1">
+          <div>単品JAN: <b id="link-jan-val" class="text-slate-800">---</b></div>
+          <div>箱JAN: <b id="link-boxjan-val" class="text-indigo-600">---</b></div>
+        </div>
       </div>
     </div>
     <div class="flex gap-2">
@@ -342,21 +407,22 @@
   </div>
 </div>
 
-<!-- OCR数字読み取りダイアログ -->
+<!-- OCR数字読み取りダイアログ (コンパクト・絶対閉じる構造) -->
 <div id="field-scan-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-4 space-y-3 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
-      <h3 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-eye text-blue-600"></i> 13桁数字 OCR自動解析</h3>
+      <h3 class="font-bold text-slate-800 text-sm"><i class="fa-solid fa-eye text-blue-600"></i> 13桁数字 OCR解析</h3>
       <button onclick="closeFieldScanModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
     </div>
-    <div class="relative overflow-hidden rounded-lg bg-black min-h-[220px] flex items-center justify-center">
+    <!-- 縮小されたカメラプレビューエリア (200px) -->
+    <div class="relative overflow-hidden rounded-lg bg-black h-[200px] flex items-center justify-center">
       <video id="ocr-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
       <div class="scan-guide-overlay">
-        <div class="scan-guide-box" style="width:90%; height:80px;"></div>
+        <div class="scan-guide-box" style="width:90%; height:60px;"></div>
       </div>
     </div>
-    <div id="ocr-status-text" class="text-xs text-center text-blue-600 font-bold">13桁の数字部分を枠内に収めてください...</div>
-    <button onclick="closeFieldScanModal()" class="w-full bg-slate-800 text-white font-bold py-2 rounded-lg text-xs">キャンセル</button>
+    <div id="ocr-status-text" class="text-xs text-center text-blue-600 font-bold">枠内に13桁数字を収めてください</div>
+    <button onclick="closeFieldScanModal()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-2 rounded-lg text-xs">閉じる</button>
   </div>
 </div>
 
@@ -638,7 +704,6 @@ async function startCamera() {
     aspectRatio: 1.0
   };
   
-  /* オートフォーカス・高解像度最適化制約 */
   const ultraPrecisionConstraints = { 
     facingMode: "environment", 
     width: { ideal: 1920, min: 1280 }, 
@@ -689,7 +754,6 @@ async function setupCameraTools() {
     if (zoom.isSupported()) {
       const r = document.getElementById('zoom-range');
       r.min = zoom.min(); r.max = zoom.max(); r.step = zoom.step() || 0.1;
-      // 遠距離対応で微精度のデフォルト倍率(1.2〜1.5倍)を設定
       const defaultZoom = Math.min(1.3, zoom.max());
       r.value = defaultZoom;
       setZoom(defaultZoom);
@@ -732,14 +796,21 @@ function resetCameraUI() {
   document.getElementById('btn-toggle-camera').className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition';
 }
 
+/* スキャン成功時処理 */
 function onScanSuccess(decodedText) {
   stopCamera();
   playBeep();
   if (navigator.vibrate) navigator.vibrate(80);
   lastScannedCode = decodedText;
   addHistory('カメラ読取', decodedText);
+
+  // その場計算アコーディオン初期化
+  document.getElementById('inplace-predict-box').classList.add('hidden');
+  document.getElementById('inplace-itf-box').classList.add('hidden');
+
   document.getElementById('scan-result-card').classList.remove('hidden');
   document.getElementById('scan-code-val').textContent = decodedText;
+  
   const svgEl = document.getElementById('scan-barcode-svg');
   const errEl = document.getElementById('barcode-error-msg');
   try {
@@ -754,8 +825,123 @@ function onScanSuccess(decodedText) {
       errEl.classList.add('hidden');
     } catch (err) { errEl.classList.remove('hidden'); }
   }
+
+  // 紐付けデータの検索 & 即時表示
+  checkAndDisplayLinkedData(decodedText);
 }
+
 function closeScanResult() { document.getElementById('scan-result-card').classList.add('hidden'); }
+
+/* 紐付け登録データの別枠検索・表示 */
+function checkAndDisplayLinkedData(code) {
+  const boxEl = document.getElementById('linked-data-box');
+  const found = db.products.find(p => p.jan === code || p.boxJan === code);
+
+  if (!found) {
+    boxEl.classList.add('hidden');
+    return;
+  }
+
+  const isUnitMatch = (found.jan === code);
+  document.getElementById('linked-role-badge').textContent = isUnitMatch ? "スキャン: 単品JAN" : "スキャン: 箱JAN";
+  document.getElementById('linked-role-badge').className = isUnitMatch ? "text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full" : "text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full";
+
+  document.getElementById('linked-product-name').textContent = found.name;
+  document.getElementById('linked-unit-jan').textContent = found.jan || '未登録';
+  document.getElementById('linked-box-jan').textContent = found.boxJan || '未登録';
+  
+  let details = [];
+  if (found.price) details.push(`価格: ¥${Number(found.price).toLocaleString()}`);
+  if (found.qty) details.push(`入数: ${found.qty}`);
+  if (found.memo) details.push(`メモ: ${found.memo}`);
+  document.getElementById('linked-details').textContent = details.length > 0 ? details.join(' | ') : '追加情報なし';
+
+  boxEl.classList.remove('hidden');
+}
+
+/* その場完結: 単品⇔箱JAN 予測のトグル展開 */
+function toggleInPlacePredict() {
+  const box = document.getElementById('inplace-predict-box');
+  if (!box.classList.contains('hidden')) {
+    box.classList.add('hidden');
+    return;
+  }
+  
+  const container = document.getElementById('inplace-predict-results');
+  container.innerHTML = '';
+  const input = lastScannedCode;
+  
+  if (!/^\d{12,14}$/.test(input)) {
+    container.innerHTML = `<div class="text-xs text-red-500">12〜14桁コードでのみ計算可能です</div>`;
+  } else {
+    const body = input.slice(0, -1);
+    const lastNum = parseInt(body.slice(-1), 10);
+    const offsets = [
+      { offset: 1, label: '＋1 (箱JAN予測)', badge: '箱' },
+      { offset: -1, label: '−1 (単品JAN予測)', badge: '単品' }
+    ];
+
+    offsets.forEach(item => {
+      const newLast = (lastNum + item.offset + 10) % 10;
+      const newBody = body.slice(0, -1) + newLast;
+      const cd = calcCheckDigit(newBody);
+      const predictedCode = newBody + cd;
+      
+      const div = document.createElement('div');
+      div.className = "bg-white p-2 rounded-lg border border-slate-200 flex justify-between items-center text-xs";
+      div.innerHTML = `
+        <div>
+          <span class="font-bold text-slate-700 mr-1">${item.label}</span>
+          <span class="font-mono font-bold text-indigo-700 text-sm">${predictedCode}</span>
+        </div>
+        <button onclick="showBarcodeModal('${predictedCode}', '${item.label}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold text-[11px]">表示</button>`;
+      container.appendChild(div);
+    });
+  }
+  box.classList.remove('hidden');
+}
+
+/* その場完結: ITF変換のトグル展開 */
+function toggleInPlaceITF() {
+  const box = document.getElementById('inplace-itf-box');
+  if (!box.classList.contains('hidden')) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  const val = lastScannedCode;
+  const labelEl = document.getElementById('inplace-itf-label');
+  const valEl = document.getElementById('inplace-itf-val');
+  const statusEl = document.getElementById('inplace-itf-status');
+
+  let result = "";
+  if (/^\d{14}$/.test(val)) {
+    const janBody = val.slice(1, 13);
+    result = janBody + calcCheckDigit(janBody);
+    labelEl.textContent = "ITF14 ➔ JAN(13桁) 変換結果:";
+  } else if (/^\d{13}$/.test(val)) {
+    const itfBody = '1' + val.slice(0, 12);
+    result = itfBody + calcCheckDigit(itfBody);
+    labelEl.textContent = "JAN(13桁) ➔ ITF14 変換結果:";
+  } else {
+    labelEl.textContent = "エラー:";
+    valEl.textContent = "13桁または14桁コードが必要です";
+    statusEl.textContent = "";
+    box.classList.remove('hidden');
+    return;
+  }
+
+  valEl.textContent = result;
+  const ok = isValidJan(result);
+  statusEl.textContent = ok ? "✓ チェックデジット正常" : "× チェックデジット不整合";
+  statusEl.className = ok ? "text-[11px] text-emerald-600 font-bold" : "text-[11px] text-red-600 font-bold";
+
+  try {
+    JsBarcode("#inplace-itf-svg", result, { format: result.length === 14 ? "ITF14" : "EAN13", width: 2, height: 40, displayValue: true });
+  } catch (e) {}
+
+  box.classList.remove('hidden');
+}
 
 function playBeep() {
   try {
@@ -767,17 +953,6 @@ function playBeep() {
     osc.start();
     osc.stop(ctx.currentTime + 0.15);
   } catch (e) {}
-}
-
-function actionFromScan(targetTab) {
-  if (!lastScannedCode) return;
-  switchTab(targetTab);
-  if (targetTab === 'predict') {
-    document.getElementById('predict-input').value = lastScannedCode;
-    predictBoxJan();
-  } else if (targetTab === 'itf') {
-    document.getElementById('itf-input').value = lastScannedCode;
-  }
 }
 
 function openScanToFavModal() {
@@ -839,25 +1014,48 @@ function predictBoxJan() {
   addHistory('箱JAN予測(±1)', input);
 }
 
-function openLinkModal(unitJan, boxJan) {
-  pendingLinkData = { unitJan, boxJan };
-  document.getElementById('link-jan-val').textContent = unitJan;
-  document.getElementById('link-boxjan-val').textContent = boxJan;
+/* 単品 / 箱役割選択付きの紐付けダイアログ */
+function openLinkModal(code1, code2 = '') {
+  pendingLinkData = { primaryCode: code1, secondaryCode: code2 };
+  document.getElementById('link-role-unit').checked = true;
   document.getElementById('link-name-input').value = '';
+  updateLinkModalView();
   document.getElementById('link-modal').classList.remove('hidden');
 }
+
+function updateLinkModalView() {
+  if (!pendingLinkData) return;
+  const isUnit = document.getElementById('link-role-unit').checked;
+  const pCode = pendingLinkData.primaryCode;
+  const sCode = pendingLinkData.secondaryCode;
+
+  if (isUnit) {
+    document.getElementById('link-jan-val').textContent = pCode || '---';
+    document.getElementById('link-boxjan-val').textContent = sCode || '未紐付け';
+  } else {
+    document.getElementById('link-jan-val').textContent = sCode || '未紐付け';
+    document.getElementById('link-boxjan-val').textContent = pCode || '---';
+  }
+}
+
 function closeLinkModal() {
   document.getElementById('link-modal').classList.add('hidden');
   pendingLinkData = null;
 }
+
 function confirmLinkSave() {
   if (!pendingLinkData) return;
-  const name = document.getElementById('link-name-input').value.trim() || '紐付け商品 ' + pendingLinkData.unitJan.slice(-4);
+  const isUnit = document.getElementById('link-role-unit').checked;
+  const name = document.getElementById('link-name-input').value.trim() || '紐付け商品 ' + pendingLinkData.primaryCode.slice(-4);
+  
+  const unitJan = isUnit ? pendingLinkData.primaryCode : pendingLinkData.secondaryCode;
+  const boxJan = isUnit ? pendingLinkData.secondaryCode : pendingLinkData.primaryCode;
+
   const newP = {
     id: Date.now().toString(),
     name,
-    jan: pendingLinkData.unitJan,
-    boxJan: pendingLinkData.boxJan,
+    jan: unitJan,
+    boxJan: boxJan,
     price: '',
     qty: '',
     memo: '即時紐付け保存'
@@ -867,6 +1065,10 @@ function confirmLinkSave() {
   closeLinkModal();
   alert('商品情報として紐付け・保存しました。');
   searchManageItem();
+  
+  if (lastScannedCode) {
+    checkAndDisplayLinkedData(lastScannedCode);
+  }
 }
 
 function searchManageItem() {
@@ -877,7 +1079,7 @@ function searchManageItem() {
 
   let items = db.products;
   if (q) {
-    items = items.filter(p => p.name.toLowerCase().includes(q) || p.jan.includes(q) || (p.boxJan && p.boxJan.includes(q)));
+    items = items.filter(p => p.name.toLowerCase().includes(q) || (p.jan && p.jan.includes(q)) || (p.boxJan && p.boxJan.includes(q)));
   }
 
   if (items.length === 0) {
@@ -891,7 +1093,7 @@ function searchManageItem() {
     div.innerHTML = `
       <div class="space-y-1">
         <div class="font-bold text-slate-800 text-sm">${esc(item.name)}</div>
-        <div class="font-mono text-slate-500">JAN: <b>${esc(item.jan)}</b> ${item.boxJan ? `/ 箱: <b>${esc(item.boxJan)}</b>` : ''}</div>
+        <div class="font-mono text-slate-500">JAN: <b>${esc(item.jan || '-')}</b> ${item.boxJan ? `/ 箱: <b>${esc(item.boxJan)}</b>` : ''}</div>
         <div class="text-slate-500">¥${esc(item.price || '-')} | 入数: ${esc(item.qty || '-')} ${item.memo ? `| ${esc(item.memo)}` : ''}</div>
       </div>
       <div class="flex gap-1.5">
@@ -919,7 +1121,7 @@ function editManageProduct(id) {
   if (!item) return;
   document.getElementById('mp-id').value = item.id;
   document.getElementById('mp-name').value = item.name;
-  document.getElementById('mp-jan').value = item.jan;
+  document.getElementById('mp-jan').value = item.jan || '';
   document.getElementById('mp-boxjan').value = item.boxJan || '';
   document.getElementById('mp-price').value = item.price || '';
   document.getElementById('mp-qty').value = item.qty || '';
@@ -962,11 +1164,11 @@ function saveManageProduct(e) {
   searchManageItem();
 }
 
-/* 2. 紐付け・手動入力用「13桁数字 OCR自動解析読み取り」 */
+/* 2. 紐付け・手動入力用「コンパクトOCR自動解析読み取り」 */
 async function scanToField(fieldId) {
   targetScanFieldId = fieldId;
   document.getElementById('field-scan-modal').classList.remove('hidden');
-  document.getElementById('ocr-status-text').textContent = "13桁の数字部分を枠内に収めてください...";
+  document.getElementById('ocr-status-text').textContent = "枠内に13桁数字を収めてください";
   
   const video = document.getElementById('ocr-video');
   try {
@@ -980,7 +1182,6 @@ async function scanToField(fieldId) {
     });
     video.srcObject = ocrStream;
     
-    // 定期フレームキャプチャ・OCR実行
     ocrInterval = setInterval(() => {
       captureAndRecognizeNumber(video);
     }, 700);
@@ -1001,13 +1202,11 @@ async function captureAndRecognizeNumber(video) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Tesseract.jsによる高速数字解析
     const result = await Tesseract.recognize(canvas, 'eng', {
       tessedit_char_whitelist: '0123456789'
     });
 
     const text = result.data.text.replace(/\s+/g, '');
-    // 連続する13桁（または14桁）の数字列を探す
     const match = text.match(/\d{13,14}/);
 
     if (match) {
@@ -1015,11 +1214,12 @@ async function captureAndRecognizeNumber(video) {
       if (isValidJan(extractedCode) || extractedCode.length === 14) {
         playBeep();
         if (navigator.vibrate) navigator.vibrate(80);
-        document.getElementById(targetScanFieldId).value = extractedCode;
+        if (targetScanFieldId && document.getElementById(targetScanFieldId)) {
+          document.getElementById(targetScanFieldId).value = extractedCode;
+        }
         
-        // 得られた数字を即座にバーコード表示モーダルでビジュアル確認
-        showBarcodeModal(extractedCode, "読み取り成功 (13/14桁)");
         closeFieldScanModal();
+        showBarcodeModal(extractedCode, "読み取り成功");
       }
     }
   } catch (e) {
@@ -1029,6 +1229,7 @@ async function captureAndRecognizeNumber(video) {
   }
 }
 
+/* 安全にカメラストリームを止めてダイアログを閉じる */
 function closeFieldScanModal() {
   if (ocrInterval) { clearInterval(ocrInterval); ocrInterval = null; }
   if (ocrStream) {
