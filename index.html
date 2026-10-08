@@ -126,6 +126,20 @@
           <i class="fa-solid fa-power-off"></i> <span>カメラ起動</span>
         </button>
       </div>
+
+      <!-- カメラ読み取り不能時の手入力フォーム -->
+      <div class="mt-3 pt-3 border-t border-slate-100">
+        <label class="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+          <i class="fa-solid fa-keyboard text-blue-600"></i> 読み込めない場合は手入力 (8/12/13/14桁)
+        </label>
+        <div class="flex gap-2">
+          <input type="text" id="manual-jan-input" placeholder="JAN/ITFコードを直接入力" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button onclick="processManualJan()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1">
+            <i class="fa-solid fa-magnifying-glass"></i> 確定
+          </button>
+        </div>
+      </div>
+
       <div id="cam-tools" class="mt-2 items-center gap-3" style="display:none">
         <button id="btn-torch" onclick="toggleTorch()" class="px-3 py-2 bg-amber-100 text-amber-800 rounded-lg text-xs font-bold" style="display:none"><i class="fa-solid fa-lightbulb"></i> ライト</button>
         <label id="zoom-wrap" class="flex-1 items-center gap-2 text-xs text-slate-500" style="display:none">
@@ -139,7 +153,7 @@
     <div id="scan-result-card" class="bg-white rounded-xl shadow-lg border-2 border-blue-500 p-5 hidden space-y-4">
       <div class="flex justify-between items-start border-b pb-3">
         <div>
-          <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">スキャン結果</span>
+          <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">読み込み / 入力結果</span>
           <div class="text-2xl font-black text-slate-900 font-mono tracking-widest mt-0.5" id="scan-code-val">----</div>
         </div>
         <button onclick="closeScanResult()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fa-solid fa-xmark text-xl"></i></button>
@@ -170,21 +184,37 @@
 
       <!-- その場で完結できる派生操作エリア -->
       <div class="space-y-3 pt-1">
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <button onclick="toggleInPlacePredict()" class="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
             <i class="fa-solid fa-boxes-packing text-indigo-600 text-lg"></i>
             <div>
-              <div class="text-xs font-bold">単品 ⇔ 箱JAN 予測 (±1)</div>
-              <div class="text-[10px] text-indigo-600">その場で計算展開</div>
+              <div class="text-xs font-bold">単品 ⇔ 箱JAN (±1)</div>
+              <div class="text-[10px] text-indigo-600">計算展開</div>
+            </div>
+          </button>
+          <button onclick="searchWebForBoxJan()" class="bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
+            <i class="fa-solid fa-globe text-amber-600 text-lg"></i>
+            <div>
+              <div class="text-xs font-bold">ネット情報探索</div>
+              <div class="text-[10px] text-amber-700">箱JAN候補を検索</div>
             </div>
           </button>
           <button onclick="toggleInPlaceITF()" class="bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 p-2.5 rounded-lg text-left flex items-center gap-2 transition">
             <i class="fa-solid fa-arrow-right-arrow-left text-teal-600 text-lg"></i>
             <div>
               <div class="text-xs font-bold">ITF 14桁 変換</div>
-              <div class="text-[10px] text-teal-600">その場で相互変換</div>
+              <div class="text-[10px] text-teal-600">相互変換</div>
             </div>
           </button>
+        </div>
+
+        <!-- その場展開コンテンツ: ネット検索箱JAN候補 -->
+        <div id="inplace-web-box" class="bg-amber-50/60 p-3 rounded-xl border border-amber-200 space-y-2 hidden">
+          <div class="text-xs font-bold text-amber-900 border-b border-amber-200 pb-1 flex items-center justify-between">
+            <span><i class="fa-solid fa-globe"></i> ネット情報に基づく箱JAN・関連候補</span>
+            <span id="web-search-spinner" class="text-[10px] text-amber-700 hidden animate-pulse">検索中...</span>
+          </div>
+          <div id="inplace-web-results" class="space-y-2"></div>
         </div>
 
         <!-- その場展開コンテンツ: 箱JAN予測結果 -->
@@ -360,7 +390,7 @@
 
 <!-- Modals -->
 
-<!-- 単品⇔箱の即時紐付けダイアログ（役割選択機能付き） -->
+<!-- 単品⇔箱の即時紐付けダイアログ -->
 <div id="link-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
   <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl">
     <div class="flex justify-between items-center border-b pb-2">
@@ -514,6 +544,11 @@ window.addEventListener('DOMContentLoaded', () => {
       startGroupSync(currentGroupId);
     }
   }, 500);
+
+  // 手入力エンターキー対応
+  document.getElementById('manual-jan-input')?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') processManualJan();
+  });
 });
 
 function connectSimpleGroup() {
@@ -627,6 +662,27 @@ function isValidJan(code) {
   return calcCheckDigit(code.slice(0, -1)) === parseInt(code.slice(-1), 10);
 }
 
+/* 手入力処理機能 */
+function processManualJan() {
+  const inputEl = document.getElementById('manual-jan-input');
+  let code = inputEl.value.trim();
+  if (!code) return alert("JANコードを入力してください");
+  
+  if (code.length === 12 && /^\d+$/.test(code)) {
+    code = '0' + code;
+  }
+  
+  if (!/^\d+$/.test(code) || !isValidJan(code)) {
+    if (!confirm("チェックデジットが不一致または一般的でない桁数です。このまま確定しますか？")) {
+      return;
+    }
+  }
+
+  if (isScanning) stopCamera();
+  inputEl.value = "";
+  onScanSuccess(code, '手入力');
+}
+
 /* 1. 高精度・遠距離オートフォーカス対応スキャナー */
 function toggleCamera() { isScanning ? stopCamera() : startCamera(); }
 
@@ -651,7 +707,7 @@ function onDecoded(text) {
   if (guideBox) guideBox.classList.add('success');
 
   lastRead = ""; sameCount = 0;
-  onScanSuccess(code);
+  onScanSuccess(code, 'カメラ読取');
 }
 
 async function startCamera() {
@@ -764,16 +820,16 @@ function resetCameraUI() {
   document.getElementById('btn-toggle-camera').className = 'flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition';
 }
 
-/* スキャン成功時処理 */
-function onScanSuccess(decodedText) {
-  stopCamera();
+/* スキャン・確定成功時処理 */
+function onScanSuccess(decodedText, sourceType = 'カメラ読取') {
   playBeep();
   if (navigator.vibrate) navigator.vibrate(80);
   lastScannedCode = decodedText;
-  addHistory('カメラ読取', decodedText);
+  addHistory(sourceType, decodedText);
 
   // その場計算アコーディオン初期化
   document.getElementById('inplace-predict-box').classList.add('hidden');
+  document.getElementById('inplace-web-box').classList.add('hidden');
   document.getElementById('inplace-itf-box').classList.add('hidden');
 
   document.getElementById('scan-result-card').classList.remove('hidden');
@@ -825,6 +881,98 @@ function checkAndDisplayLinkedData(code) {
   document.getElementById('linked-details').textContent = details.length > 0 ? details.join(' | ') : '追加情報なし';
 
   boxEl.classList.remove('hidden');
+}
+
+/* ネット情報探索（箱JAN・ITFコード候補探索） */
+async function searchWebForBoxJan() {
+  const box = document.getElementById('inplace-web-box');
+  const resultsEl = document.getElementById('inplace-web-results');
+  const spinner = document.getElementById('web-search-spinner');
+
+  if (!box.classList.contains('hidden')) {
+    box.classList.add('hidden');
+    return;
+  }
+
+  const jan = lastScannedCode;
+  resultsEl.innerHTML = '';
+  spinner.classList.remove('hidden');
+  box.classList.remove('hidden');
+
+  try {
+    // Yahoo!ショッピング等のAPIエンドポイント経由で製品データやケースJAN候補を探す
+    const res = await fetch(`https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch?appid=dj00aiZpPVptRzh3R3A2TjhYVCZzPWNvbnN1bWVyc2VydmljZSZzPXR3d3Rlc3Q-&jan_code=${jan}`);
+    const data = await res.json();
+    
+    spinner.classList.add('hidden');
+
+    const candidates = [];
+    
+    // 標準14桁ITFの標準生成候補
+    if (jan.length === 13) {
+      const stdItfBody = '1' + jan.slice(0, 12);
+      const stdItf = stdItfBody + calcCheckDigit(stdItfBody);
+      candidates.push({ code: stdItf, label: '標準ケースITF(14桁)', source: '自動計算規約' });
+    }
+
+    if (data && data.hits && data.hits.length > 0) {
+      const hit = data.hits[0];
+      const title = hit.name || '';
+      
+      // テキストから13桁/14桁コードパターンを検出
+      const matches = title.match(/(?:ケース|箱|ITF|JAN)?[:\s]*(\d{13,14})/g) || [];
+      matches.forEach(m => {
+        const cleanCode = m.replace(/\D/g, '');
+        if ((cleanCode.length === 13 || cleanCode.length === 14) && cleanCode !== jan) {
+          if (!candidates.some(c => c.code === cleanCode)) {
+            candidates.push({ code: cleanCode, label: title.slice(0, 20) + '...', source: '商品情報' });
+          }
+        }
+      });
+    }
+
+    if (candidates.length === 0) {
+      resultsEl.innerHTML = `<div class="text-xs text-amber-800 p-2">ネット上に明確な箱JAN情報が見つかりませんでした。Standard ITF14等の予測計算をご活用ください。</div>`;
+      return;
+    }
+
+    candidates.forEach(c => {
+      const div = document.createElement('div');
+      div.className = "bg-white p-2.5 rounded-lg border border-amber-200 flex justify-between items-center text-xs shadow-sm";
+      div.innerHTML = `
+        <div>
+          <div class="font-bold text-slate-800">${esc(c.label)}</div>
+          <div class="font-mono font-bold text-amber-800 text-sm">${esc(c.code)} <span class="text-[10px] text-slate-400 font-sans">(${esc(c.source)})</span></div>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button onclick="openLinkModal('${esc(jan)}', '${esc(c.code)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded font-bold text-[11px] flex items-center gap-1">
+            <i class="fa-solid fa-link"></i> 紐付け
+          </button>
+          <button onclick="showBarcodeModal('${esc(c.code)}', '${esc(c.label)}')" class="bg-amber-50 hover:bg-amber-100 text-amber-800 px-2 py-1 rounded font-bold text-[11px]">表示</button>
+        </div>`;
+      resultsEl.appendChild(div);
+    });
+
+  } catch (err) {
+    spinner.classList.add('hidden');
+    // オフラインまたはAPI取得不能時のフォールバック (標準ITF計算のみを安全に提案)
+    if (jan.length === 13) {
+      const stdItfBody = '1' + jan.slice(0, 12);
+      const stdItf = stdItfBody + calcCheckDigit(stdItfBody);
+      resultsEl.innerHTML = `
+        <div class="bg-white p-2.5 rounded-lg border border-amber-200 flex justify-between items-center text-xs">
+          <div>
+            <div class="font-bold text-slate-800">標準ITFケース14桁 (予測)</div>
+            <div class="font-mono font-bold text-amber-800 text-sm">${stdItf}</div>
+          </div>
+          <button onclick="openLinkModal('${esc(jan)}', '${esc(stdItf)}')" class="bg-amber-600 hover:bg-amber-700 text-white px-2 py-1 rounded font-bold text-[11px]">
+            紐付け
+          </button>
+        </div>`;
+    } else {
+      resultsEl.innerHTML = `<div class="text-xs text-red-500 p-1">ネット検索を実行できませんでした</div>`;
+    }
+  }
 }
 
 /* その場完結: 単品⇔箱JAN 予測のトグル展開 */
