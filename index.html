@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>JAN Master Pro v1.2</title>
+    <title>JAN Master Pro v1.3</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -62,7 +62,7 @@
             </div>
         </div>
         <div class="absolute left-2 top-11 text-[10px] bg-black/30 text-white/80 px-1.5 py-0.5 rounded backdrop-blur-sm pointer-events-none">
-            V1.2
+            V1.3
         </div>
     </header>
 
@@ -403,7 +403,6 @@
         let currentScannedCode = '';
         let currentActivePanel = null;
         let calcMode = 'singleToBox';
-        let activeMediaStream = null;
 
         let db = null;
         let syncGroupId = localStorage.getItem('jan_master_sync_id') || '';
@@ -434,7 +433,7 @@
             }
         }
 
-        // --- Camera Logic with MediaDevices Permission Pre-flight & Fallbacks ---
+        // --- Camera Logic (Stabilized for Quagga2) ---
         function toggleCamera() {
             if (isCameraRunning) {
                 stopCamera();
@@ -456,42 +455,29 @@
                 return;
             }
 
-            // 3. 事前カメラパーミッションの確保（権限の自動遮断を回避）
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                activeMediaStream = stream; // アクティブストリーム保持
-            } catch (err) {
-                console.error("Camera permission error:", err);
-                if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-                    alert("カメラへのアクセス許可が拒否されています。ブラウザのアドレスバー付近からカメラ利用を「許可」に切り替えて更新してください。");
-                } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-                    alert("利用可能なカメラが見つかりません。");
-                } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-                    alert("カメラが他のアプリで既に使用されているか、システムにロックされています。他のアプリを閉じて再試行してください。");
-                } else {
-                    alert(`カメラへのアクセス時にエラーが発生しました: ${err.message}`);
-                }
-                return;
-            }
+            // 既存ストリームの安全な停止
+            stopCamera();
 
-            // 4. Quagga2の起動初期化
+            // 3. Quagga2の起動初期化
+            const targetElem = document.querySelector('#interactive');
+            targetElem.innerHTML = ''; // クリア処理
+
             Quagga.init({
                 inputStream: {
                     name: "Live",
                     type: "LiveStream",
-                    target: document.querySelector('#interactive'),
+                    target: targetElem,
                     constraints: {
                         facingMode: "environment",
                         width: { min: 640, ideal: 1280 },
-                        height: { min: 480, ideal: 720 },
-                        aspectRatio: { ideal: 1.777777778 }
+                        height: { min: 480, ideal: 720 }
                     }
                 },
                 locator: {
                     patchSize: "medium",
                     halfSample: true
                 },
-                numOfWorkers: navigator.hardwareConcurrency ? Math.min(navigator.hardwareConcurrency, 4) : 2,
+                numOfWorkers: 0, // ワーカー生成エラーによる初期化失敗を防止
                 decoder: {
                     readers: ["ean_reader", "ean_8_reader", "itf_reader"]
                 },
@@ -499,7 +485,7 @@
             }, function(err) {
                 if (err) {
                     console.error("Quagga initialization error:", err);
-                    alert("バーコード認識エンジンの初期化に失敗しました。再読み込みをお試しください。");
+                    alert("バーコード認識エンジンの初期化に失敗しました。カメラ権限を確認してください。");
                     stopCamera();
                     return;
                 }
@@ -515,16 +501,9 @@
         }
 
         function stopCamera() {
-            // Quagga停止
             if (isCameraRunning) {
                 try { Quagga.stop(); } catch (e) { console.log(e); }
                 isCameraRunning = false;
-            }
-
-            // ブラウザのMediaStreamTrackのリソース開放（カメラの完全停止）
-            if (activeMediaStream) {
-                activeMediaStream.getTracks().forEach(track => track.stop());
-                activeMediaStream = null;
             }
 
             const activeTrack = Quagga.CameraAccess.getActiveTrack();
